@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fingertip Tactics</title>
+  <!-- 空 favicon：不给浏览器去要 /favicon.ico，控制台就不会留下那条 404。 -->
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./cover.css">
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #111; }
+    #file-warning { position: fixed; inset: 0; display: grid; place-items: center; padding: 2rem;
+      color: #fff; background: #111; font: 18px/1.5 system-ui, sans-serif; text-align: center; }
+    #file-warning[hidden] { display: none; }
+    code { background: #333; padding: 0.1em 0.4em; border-radius: 4px; }
+  </style>
+  <!-- three.js comes from a CDN, pinned to one version. No install needed. -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <section id="title-screen" aria-label="Fingertip Tactics">
+    <img class="cover-art" src="./assets/fingertip-tactics-cover.jpg" width="1672" height="941"
+         alt="Fingertip Tactics — two beast-headed figures face each other across a round table, with the battlefield floating between them" fetchpriority="high">
+    <div class="cover-controls">
+      <button id="start-game" type="button">START GAME</button>
+      <p id="start-status" role="status"></p>
+    </div>
+  </section>
+  <div id="file-warning" hidden>
+    <p>This game needs a local server.<br>
+      In this folder run <code>python3 -m http.server 8000 --bind 127.0.0.1</code><br>
+      (Windows: <code>py -m http.server 8000 --bind 127.0.0.1</code>, or <code>python</code> instead of <code>py</code>)<br>
+      then open <a href="http://localhost:8000" style="color:#8cf">http://localhost:8000</a></p>
+  </div>
+  <!-- If three.js (from the internet) or main.js fails to load, say so instead of showing a blank page. -->
+  <script type="module" src="./launcher.js"></script>
+</body>
+</html>

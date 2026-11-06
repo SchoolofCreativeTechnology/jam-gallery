@@ -1,0 +1,11 @@
+{
+  "title": "Fingertip Tactics",
+  "handle": "fingertip-tactics",
+  "description": "A tavern after closing. You and the computer each have one pawn on the board. Throw a hand sign at the camera, win the round, and your pawn steps closer to the enemy camp.",
+  "assets": [],
+  "ai_assets": [
+    "assets/fingertip-tactics-cover.jpg",
+    "assets/board.glb",
+    "assets/tripo/tripo-pawn.glb"
+  ]
+}
