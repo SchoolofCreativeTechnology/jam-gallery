@@ -1,0 +1,27 @@
+{
+  "title": "Last Train Home",
+  "handle": "vihaan-katie",
+  "description": "A tired cat rides the last train home across an endless sea. Remember the coach you are shown: if nothing has changed, walk on through the door ahead. If a passenger or the coach itself has changed, turn back through the door behind. Four changed coaches and you are home — two where a passenger has turned, two where the coach itself is wrong, and which four is re-shuffled every ride.",
+  "credits": "Game logic adapted from loop-engine (MIT, Copyright (c) 2026 Loop Engine contributors).",
+  "assets": [
+    { "file": "assets/wood-floor-diffuse.jpg", "source": "Dimitrios Savva / Poly Haven", "license": "CC0" },
+    { "file": "assets/wood-floor-normal.jpg", "source": "Dimitrios Savva / Poly Haven", "license": "CC0" },
+    { "file": "assets/wood-floor-roughness.jpg", "source": "Dimitrios Savva / Poly Haven", "license": "CC0" },
+    { "file": "assets/dusk-sky.hdr", "source": "Greg Zaal and Jarod Guest / Poly Haven", "license": "CC0" },
+    { "file": "assets/audio/music/stage-1-vaporware.mp3", "source": "The Cynic Project — Vaporware", "license": "CC0" },
+    { "file": "assets/audio/music/stage-2-mystical-piano.mp3", "source": "Indieteur — Mystical Piano", "license": "CC0" },
+    { "file": "assets/audio/music/stage-3-slow-piano.mp3", "source": "Julie Damsgaard / Spring Spring — Slow Piano Intermission", "license": "CC0" },
+    { "file": "assets/audio/music/stage-4-sirens.mp3", "source": "The Cynic Project — Sirens in Darkness", "license": "CC0" }
+  ],
+  "ai_assets": [
+    "assets/models/fox-normal.glb",
+    "assets/models/fox-anomaly.glb",
+    "assets/models/rabbit-normal.glb",
+    "assets/models/rabbit-anomaly.glb",
+    "assets/models/goat-normal.glb",
+    "assets/models/goat-anomaly.glb",
+    "assets/models/mouse-normal.glb",
+    "assets/models/mouse-anomaly.glb",
+    "assets/models/cat.glb"
+  ]
+}
