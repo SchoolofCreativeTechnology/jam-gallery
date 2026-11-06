@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Way of the Whisker</title>
+  <link rel="stylesheet" href="./style.css">
+  <!-- three.js pinned to one version. No install needed. -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="file-warning" hidden>
+    <p>This game needs a local server.<br>
+      In this folder run <code>python3 -m http.server 8000 --bind 127.0.0.1</code><br>
+      (Windows: <code>py -m http.server 8000 --bind 127.0.0.1</code>, or <code>python</code> instead of <code>py</code>)<br>
+      then open <a href="http://localhost:8000" style="color:#8cf">http://localhost:8000</a></p>
+  </div>
+
+  <div id="loading" class="screen active">
+    <h1>Way of the Whisker</h1>
+    <p>Loading…</p>
+  </div>
+
+  <div id="ui">
+    <div id="title" class="screen title-screen">
+      <img src="./assets/title-screen.png" alt="Way of the Whisker" class="title-image">
+    </div>
+    <div id="gameover" class="screen">
+      <h1>The flood caught you</h1>
+      <div class="brush-underline"></div>
+      <p id="final-score"></p>
+      <p>Press <strong>Space</strong> or <strong>R</strong> to begin again</p>
+    </div>
+    <div id="hud" class="hud" hidden>Height: 0 m</div>
+    <div id="hint" class="hint" hidden>Hold Space (or touch) to sweep the arc, release to jump</div>
+  </div>
+
+  <script>
+    if (location.protocol === 'file:') {
+      document.getElementById('file-warning').hidden = false;
+    }
+  </script>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

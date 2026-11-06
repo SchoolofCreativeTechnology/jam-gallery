@@ -1,0 +1,30 @@
+{
+  "title": "Way of the Whisker",
+  "handle": "tiffany623",
+  "description": "A calico cat climbs misty Jiangnan rooftops, holding to aim and releasing to jump, always staying ahead of the rising flood.",
+  "assets": [
+    {
+      "file": "assets/cat.glb",
+      "source": "Codex",
+      "license": "original",
+      "note": "Custom animated 3D calico cat created by the maker via Codex"
+    },
+    {
+      "file": "cat-controller.js",
+      "source": "Codex",
+      "license": "original",
+      "note": "Animation controller for the custom calico cat GLB"
+    },
+    {
+      "file": "assets/title-screen.png",
+      "source": "original",
+      "license": "original",
+      "note": "Title screen artwork created by the maker"
+    }
+  ],
+  "ai_assets": [
+    "assets/audio/jump.wav",
+    "assets/audio/break.wav",
+    "assets/audio/splash.wav"
+  ]
+}
