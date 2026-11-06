@@ -1,0 +1,80 @@
+/* UI overlay for title, HUD, game-over, and win panels. */
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #fff;
+}
+
+.panel {
+  position: absolute;
+  background: rgba(20, 24, 32, 0.82);
+  border-radius: 12px;
+  padding: 1.5rem 2rem;
+  text-align: center;
+}
+
+.hidden {
+  display: none !important;
+}
+
+#title {
+  inset: 0;
+  display: grid;
+  place-content: center;
+  background: rgba(16, 20, 28, 0.9);
+  border-radius: 0;
+}
+
+#title h1 {
+  margin: 0 0 0.5rem;
+  font-size: 3rem;
+}
+
+#title p {
+  margin: 0.4rem 0;
+  font-size: 1.1rem;
+  color: #cdd;
+}
+
+#hud {
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.6rem 1.2rem;
+}
+
+#timer {
+  font-size: 2rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+#gameover,
+#win {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 240px;
+}
+
+#gameover h2,
+#win h2 {
+  margin: 0 0 0.75rem;
+  font-size: 2rem;
+}
+
+#gameover p,
+#win p {
+  margin: 0.4rem 0;
+  font-size: 1rem;
+  color: #cdd;
+}
+
+#gameover .time,
+#win .time,
+#win .best {
+  color: #fff;
+  font-weight: 600;
+}
