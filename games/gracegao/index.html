@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tidal Island</title>
+  <link rel="icon" href="data:,">   <!-- stops the browser asking for a favicon we don't have -->
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #111; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    canvas { display: block; }
+
+    /* HUD */
+    #hud { position: fixed; top: 0; left: 0; right: 0; padding: 14px 16px; pointer-events: none;
+      display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; color: #2b3a44; }
+    #inventory { background: rgba(255,255,255,0.78); border-radius: 12px; padding: 10px 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.12); min-width: 168px; }
+    #inventory h2 { margin: 0 0 6px; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: #6b7c88; }
+    .inv-row { display: flex; align-items: center; gap: 8px; font-size: 14px; line-height: 1.7; }
+    .inv-row.empty { opacity: 0.45; }
+    .dot { width: 11px; height: 11px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.15); flex: none; }
+    .inv-row .name { flex: 1; }
+    .inv-row .count { font-variant-numeric: tabular-nums; font-weight: 600; }
+    #inventory .total { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(0,0,0,0.12);
+      font-size: 14px; display: flex; justify-content: space-between; }
+
+    #right { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; pointer-events: none; }
+    #tide { background: rgba(255,255,255,0.78); border-radius: 12px; padding: 10px 12px; width: 220px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.12); }
+    #tide-label { font-size: 13px; color: #33484f; display: block; margin-bottom: 6px; }
+    #tide-bar { height: 12px; border-radius: 6px; background: #cfe3ea; overflow: hidden; }
+    #tide-fill { height: 100%; width: 0%; border-radius: 6px; background: linear-gradient(90deg,#7fd0e6,#2f86b0);
+      transition: width 0.15s linear; }
+
+    #restart { pointer-events: auto; cursor: pointer; font: inherit; font-size: 14px; color: #2b3a44;
+      border: 0; border-radius: 10px; padding: 9px 14px; background: rgba(255,255,255,0.85);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.12); }
+    #restart:hover { background: #fff; }
+
+    #message { position: fixed; left: 50%; bottom: 44px; transform: translate(-50%, 8px);
+      background: rgba(43,58,68,0.86); color: #fff; padding: 8px 16px; border-radius: 999px;
+      font-size: 14px; opacity: 0; transition: opacity 0.2s, transform 0.2s; pointer-events: none; }
+    #message.show { opacity: 1; transform: translate(-50%, 0); }
+
+    /* Title screen */
+    #title-screen { position: fixed; inset: 0; display: grid; place-items: center; z-index: 20;
+      background: radial-gradient(circle at 50% 40%, rgba(191,224,239,0.96), rgba(120,176,204,0.96)); }
+    #title-screen.hidden { display: none; }
+    #title-card { text-align: center; color: #21343d; background: rgba(255,255,255,0.7);
+      padding: 30px 40px; border-radius: 18px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); }
+    #title-card h1 { margin: 0 0 6px; font-size: 40px; letter-spacing: 0.01em; }
+    #title-card p { margin: 4px 0; font-size: 15px; color: #40565f; }
+    #play { margin-top: 16px; cursor: pointer; font: inherit; font-size: 17px; color: #fff; border: 0;
+      border-radius: 12px; padding: 11px 26px; background: #2f86b0; }
+    #play:hover { background: #3a9ac7; }
+
+    /* Money card */
+    #money { background: rgba(255,255,255,0.85); border-radius: 12px; padding: 8px 14px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.12); display: flex; align-items: baseline; gap: 10px; }
+    #money .label { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #6b7c88; }
+    #money-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    /* Prompts and labels pinned over things in the world */
+    #prompt { position: fixed; transform: translate(-50%, -100%); background: rgba(43,58,68,0.9);
+      color: #fff; padding: 7px 14px; border-radius: 999px; font-size: 14px; white-space: nowrap;
+      pointer-events: none; z-index: 4; box-shadow: 0 4px 14px rgba(0,0,0,0.2); }
+    #sign-label { position: fixed; transform: translate(-50%, -50%); background: rgba(255,255,255,0.88);
+      color: #4a3a22; padding: 5px 12px; border-radius: 8px; font-size: 13px; letter-spacing: 0.04em;
+      white-space: nowrap; pointer-events: none; z-index: 4; border: 1px solid rgba(0,0,0,0.1); }
+
+    /* Crafted goods, shown briefly after crafting */
+    #goods { position: fixed; top: 108px; left: 50%; transform: translateX(-50%); z-index: 4;
+      background: rgba(255,255,255,0.9); border-radius: 12px; padding: 10px 16px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15); min-width: 208px; }
+    #goods .goods-title { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #6b7c88; margin-bottom: 4px; }
+    .goods-row, .day-line { display: flex; justify-content: space-between; gap: 24px; font-size: 14px; line-height: 1.7; }
+
+    /* Day-end screen */
+    #day-end { position: fixed; inset: 0; display: grid; place-items: center; z-index: 15;
+      background: rgba(20,40,52,0.45); }
+    #day-card { text-align: center; color: #21343d; background: rgba(255,255,255,0.94);
+      padding: 26px 36px; border-radius: 18px; box-shadow: 0 12px 34px rgba(0,0,0,0.25); min-width: 264px; }
+    #day-card h2 { margin: 0 0 6px; font-size: 26px; }
+    #day-card .day-story { margin: 0 0 12px; font-size: 14px; color: #40565f; }
+    .day-line.day-total { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(0,0,0,0.12);
+      font-weight: 700; font-size: 17px; }
+    #next-day { margin-top: 16px; cursor: pointer; font: inherit; font-size: 16px; color: #fff; border: 0;
+      border-radius: 12px; padding: 10px 22px; background: #2f86b0; }
+    #next-day:hover { background: #3a9ac7; }
+
+    #prompt.hidden, #sign-label.hidden, #goods.hidden, #day-end.hidden { display: none; }
+
+    #file-warning { position: fixed; inset: 0; display: grid; place-items: center; padding: 2rem;
+      color: #fff; background: #111; font: 18px/1.5 system-ui, sans-serif; text-align: center; z-index: 10; }
+    #file-warning[hidden] { display: none; }
+    code { background: #333; padding: 0.1em 0.4em; border-radius: 4px; }
+  </style>
+  <!-- three.js comes from a CDN, pinned to one version. No install needed. -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="file-warning" hidden>
+    <p>This game needs a local server.<br>
+      In this folder run <code>python3 -m http.server 8000 --bind 127.0.0.1</code><br>
+      (Windows: <code>py -m http.server 8000 --bind 127.0.0.1</code>, or <code>python</code> instead of <code>py</code>)<br>
+      then open <a href="http://localhost:8000" style="color:#8cf">http://localhost:8000</a></p>
+  </div>
+  <script>
+    // Browsers block game code opened straight from a file. Say so instead of showing a blank page.
+    if (location.protocol === 'file:') document.getElementById('file-warning').hidden = false;
+  </script>
+
+  <!-- HUD: inventory on the left, money, low-tide bar and restart on the right. -->
+  <div id="hud">
+    <div id="inventory">
+      <h2>Satchel</h2>
+      <div id="items"></div>
+      <div class="total"><span>Collected</span><span id="total">0</span></div>
+    </div>
+    <div id="right">
+      <div id="money"><span class="label">Money</span><span id="money-value">$0</span></div>
+      <div id="tide">
+        <span id="tide-label">Low tide</span>
+        <div id="tide-bar"><div id="tide-fill"></div></div>
+      </div>
+      <button id="restart">Restart (R)</button>
+    </div>
+  </div>
+  <div id="message"></div>
+  <div id="prompt" class="hidden"></div>
+  <div id="sign-label" class="hidden"></div>
+  <div id="goods" class="hidden"></div>
+
+  <!-- Day-end screen: what the boat bought today, and the running total. -->
+  <div id="day-end" class="hidden">
+    <div id="day-card">
+      <h2>Day complete</h2>
+      <p class="day-story">The boat bought today's ice cream and jewelry.</p>
+      <div id="day-lines"></div>
+      <div class="day-line"><span>Earned today</span><span id="day-earned">$0</span></div>
+      <div class="day-line day-total"><span>Money</span><span id="day-money">$0</span></div>
+      <button id="next-day">Next day (R)</button>
+    </div>
+  </div>
+
+  <!-- Title screen. Press Play, or Space/Enter. -->
+  <div id="title-screen">
+    <div id="title-card">
+      <h1>Tidal Island</h1>
+      <p>Move with WASD or the arrow keys.</p>
+      <p>Gather sea treasures on the wet sand; fruit grows under the palms.</p>
+      <p>Waves knock you back and may make you drop an item.</p>
+      <p>When the low-tide bar fills, the sea takes the beach back.</p>
+      <p>Stand at the shop counter and press <b>E</b> to craft ice cream and jewelry.</p>
+      <p>The boat at the pier buys them, and your money carries to the next day.</p>
+      <button id="play">Play</button>
+    </div>
+  </div>
+
+  <!-- If three.js (from the internet) or main.js fails to load, say so instead of showing a blank page. -->
+  <script type="module" src="./main.js" onerror="if(location.protocol!=='file:'){var w=document.getElementById('file-warning');w.textContent='The game could not load (check your internet), then refresh the page.';w.hidden=false}"></script>
+</body>
+</html>

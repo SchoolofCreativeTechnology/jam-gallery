@@ -1,0 +1,17 @@
+{
+  "title": "Tidal Island",
+  "handle": "gracegao",
+  "description": "A little girl in a straw hat collects sea treasures and fruit on a tidal island at low tide, dodging gentle waves, then crafts her ice cream and jewelry before the boat arrives to buy them.",
+  "assets": [
+    { "file": "assets/Palm Tree by Quaternius - A6cKJYFsIb.glb", "source": "Poly Pizza (Quaternius)", "license": "CC0" },
+    { "file": "assets/Palm tree by jeremy - bjGeBbKhAVN.glb", "source": "Poly Pizza (jeremy)", "license": "CC-BY" },
+    { "file": "assets/Coconut by Poly by Google - fY5jzVAVuCl.glb", "source": "Poly Pizza (Poly by Google)", "license": "CC-BY" },
+    { "file": "assets/Blueberries by sirkitree - ecQMbKzX7Mo.glb", "source": "Poly Pizza (sirkitree)", "license": "CC-BY" },
+    { "file": "assets/Nautilus shell by Poly by Google - bceVxKNzLaJ.glb", "source": "Poly Pizza (Poly by Google)", "license": "CC-BY" },
+    { "file": "assets/Banana by Poly by Google - 2GM0SoFqf9c.glb", "source": "Poly Pizza (Poly by Google)", "license": "CC-BY" }
+  ],
+  "ai_assets": [
+    "assets/tripo_convert_68b874cf-77b5-427a-ab5d-3875b44eba50.glb",
+    "assets/after_moved.glb"
+  ]
+}
