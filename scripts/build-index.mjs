@@ -50,6 +50,7 @@ function checkGame(gamesDir, folder) {
 
   const credited = new Set([...assets.map((a) => norm(a.file)), ...aiAssets.map((a) => norm(a?.file ?? a))]);
   for (const f of walk(dir)) {
+    if (f.split('/').some((part) => part.startsWith('.'))) fail(`${f} is a hidden file or folder; remove it (never ship .claude/)`);
     if (KEY.test(readFileSync(join(dir, f), 'latin1'))) fail(`${f} contains something shaped like an API key; remove it and ship again`);
     const name = f.split('/').pop();
     if (FREE_NAMES.has(name) || FREE_EXTS.has(extname(f)) || credited.has(f)) continue;

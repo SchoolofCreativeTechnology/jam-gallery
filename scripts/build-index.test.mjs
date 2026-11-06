@@ -115,3 +115,7 @@ test('credits with ./ or backslashes match', () => {
   const dir = gamesDir({ 'paths': { meta: meta('paths', { ai_assets: ['./a.png', 'img\\b.png'] }), files: { 'a.png': 'x', 'img/b.png': 'x' } } });
   assert.equal(buildIndex(dir).length, 1);
 });
+
+test('hidden files and folders rejected', () => {
+  assert.throws(() => buildIndex(gamesDir({ hh: { meta: meta('hh'), files: { '.claude/settings.local.json': '{}' } } })), /hidden/);
+});
