@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stem to Stem</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #111; }
+    #file-warning { position: fixed; inset: 0; display: grid; place-items: center; padding: 2rem;
+      color: #fff; background: #111; font: 18px/1.5 system-ui, sans-serif; text-align: center; }
+    #file-warning[hidden] { display: none; }
+    code { background: #333; padding: 0.1em 0.4em; border-radius: 4px; }
+    /* the stem model is a few MB, so the page says something while it loads */
+    #loading { position: fixed; inset: 0; display: grid; place-items: center;
+      color: #cfe4e0; background: #101a2b; font: 18px/1.5 system-ui, sans-serif; text-align: center; }
+  </style>
+  <!-- three.js comes from a CDN, pinned to one version. No install needed. -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/",
+        "three/addons/loaders/GLTFLoader.js": "https://unpkg.com/three@0.186.1/examples/jsm/loaders/GLTFLoader.js",
+        "three/addons/loaders/DRACOLoader.js": "https://unpkg.com/three@0.186.1/examples/jsm/loaders/DRACOLoader.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="loading">Loading stem...</div>
+  <div id="file-warning" hidden>
+    <p>This game needs a local server.<br>
+      In this folder run <code>python3 -m http.server 8000 --bind 127.0.0.1</code><br>
+      (Windows: <code>py -m http.server 8000 --bind 127.0.0.1</code>, or <code>python</code> instead of <code>py</code>)<br>
+      then open <a href="http://localhost:8000" style="color:#8cf">http://localhost:8000</a></p>
+  </div>
+  <script>
+    // Browsers block game code opened straight from a file. Say so instead of showing a blank page.
+    if (location.protocol === 'file:') document.getElementById('file-warning').hidden = false;
+  </script>
+  <!-- If three.js (from the internet) or main.js fails to load, say so instead of showing a blank page. -->
+  <script type="module" src="./main.js" onerror="if(location.protocol!=='file:'){var w=document.getElementById('file-warning');w.textContent='The game could not load (check your internet), then refresh the page.';w.hidden=false}"></script>
+</body>
+</html>
