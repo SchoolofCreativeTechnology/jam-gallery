@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lucid Ink</title>
+  <style>
+    @font-face {
+      font-family: 'Ka Blam';
+      src: url('assets/fonts/KaBlam.ttf') format('truetype');
+      font-display: swap;
+    }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #F4EBD9; }
+    canvas#game { display: block; width: 100vw; height: 100vh; touch-action: none; }
+    #file-warning { position: fixed; inset: 0; display: grid; place-items: center; padding: 2rem;
+      color: #1E1B1E; background: #F4EBD9; font: 18px/1.5 system-ui, sans-serif; text-align: center; }
+    #file-warning[hidden] { display: none; }
+    code { background: #e3d7c2; padding: 0.1em 0.4em; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div id="file-warning" hidden>
+    <p>This game needs a local server.<br>
+      In this folder run <code>python3 -m http.server 8000 --bind 127.0.0.1</code><br>
+      (Windows: <code>py -m http.server 8000 --bind 127.0.0.1</code>, or <code>python</code> instead of <code>py</code>)<br>
+      then open <a href="http://localhost:8000" style="color:#b3372a">http://localhost:8000</a></p>
+  </div>
+  <script>
+    // Browsers block module scripts opened straight from a file. Say so instead of showing a blank page.
+    if (location.protocol === 'file:') document.getElementById('file-warning').hidden = false;
+  </script>
+  <canvas id="game"></canvas>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

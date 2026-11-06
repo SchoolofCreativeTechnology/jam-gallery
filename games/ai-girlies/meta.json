@@ -1,0 +1,13 @@
+{
+  "title": "Lucid Ink",
+  "handle": "ai-girlies",
+  "description": "An 8-panel comic action runner: jump, stomp, and slash your way through an unfinished issue.",
+  "assets": [
+    {
+      "file": "assets/fonts/KaBlam.ttf",
+      "source": "https://www.dafont.com/ka-blam.font",
+      "license": "Free for personal use; contact contact@imagex-fonts.com for commercial use"
+    }
+  ],
+  "ai_assets": []
+}
