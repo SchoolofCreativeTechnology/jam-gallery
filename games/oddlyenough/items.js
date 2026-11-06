@@ -1,0 +1,136 @@
+// Pawn Shop Pack objects. Legacy IDs, costs and detail IDs preserve saved ledgers.
+// Model stems match the supplied GLBs; prices remain the bargaining engine's responsibility.
+export const ITEMS = {
+  'amber-radio': {
+    id:'amber-radio', name:'After-Hours Guitar', model:'03-guitar', cost:40,
+    form:'guitar', color:'#292B32',
+    description:'A black electric guitar with a pale pickguard, a long fretted neck, and the wear of regular playing.',
+    condition:'The volume knob is missing, the finish is scratched, and one string buzzes against a worn fret. The guitar still plays.',
+    claim:'Seller says it was a much-loved family instrument. Its earlier ownership is not documented.',
+    details:[
+      {id:'where-its-from',label:'Signs of use',text:'The worn neck and scratches around the pickguard show that this guitar was played, rather than kept as an untouched display piece.',tags:['history']},
+      {id:'what-it-does',label:'What it does',text:'The strings still ring when plucked. One note buzzes against a worn fret, so it needs a setup before a clean performance.',tags:['function']},
+      {id:'how-rare',label:'Distinctive shape',text:'An angular black body and pale pickguard give this guitar a distinctive silhouette; there is no certificate establishing a rare edition.',tags:['rarity','aesthetic']},
+      {id:'what-its-worth',label:'What matters',text:'Its value is in being a playable instrument with character. The missing volume knob and fret wear are practical repair costs to consider.',tags:['value']},
+    ],
+  },
+  'tomorrowquack-duck': {
+    id:'tomorrowquack-duck', name:'Porcelain Lucky Cat', model:'04-porcelain-cat', cost:32,
+    form:'cat', color:'#E8E5D8',
+    description:'A white porcelain cat with blue accents, a small gold bell, and one paw raised in welcome.',
+    condition:'A hairline crack runs beneath the raised paw, and the blue paint is rubbed at the base. The figure stands upright.',
+    claim:'Seller calls it a lucky cat. Any promise that it brings good fortune is unverified.',
+    details:[
+      {id:'echo-chamber',label:'Hollow body',text:'A gentle tap makes the hollow porcelain body ring. It is a display figure, not a living animal.',tags:['function','rarity']},
+      {id:'beak-crack',label:'Paw crack',text:'A hairline crack sits beneath the raised paw, so that joint needs careful handling.',tags:['danger','history']},
+      {id:'watermark',label:'Base wear',text:'The underside has a faint storage ring and rubbed paint around the foot of the figure.',tags:['history']},
+      {id:'squeaker',label:'Welcoming paw',text:'The raised paw, blue collar, and small gold bell make a cheerful shelf display.',tags:['function','aesthetic']},
+    ],
+  },
+  'minute-eater-clock': {
+    id:'minute-eater-clock', name:'Minute-Eater Pocket Watch', model:'02-pocket-watch', cost:48,
+    form:'watch', color:'#C7A249',
+    description:'A gold-colored pocket watch on a chain, with a pale numbered face and hands that run counterclockwise.',
+    condition:'The winding crown catches if forced, and the minute hand pauses at seven. The case is worn near twelve.',
+    claim:'Seller claims it can give back lost time. That claim has not been demonstrated.',
+    details:[
+      {id:'counter-hands',label:'Counter-Hands',text:'The hands move counterclockwise across the numbered face with a small mechanical tick.',tags:['function','aesthetic']},
+      {id:'stuck-seven',label:'Stuck Seven',text:'The minute hand pauses at seven before moving again, making it unreliable for keeping an appointment.',tags:['function','danger']},
+      {id:'brass-wear',label:'Case wear',text:'The gold-colored case is worn near twelve and along the chain loop, where fingers have handled it repeatedly.',tags:['history','aesthetic']},
+      {id:'back-wind-key',label:'Winding crown',text:'The crown winds the watch counterclockwise. Forcing it the other way catches the mechanism.',tags:['danger','history']},
+    ],
+  },
+  'tin-valentine': {
+    id:'tin-valentine', name:'Unclaimed Gold Trophy', model:'05-gold-trophy', cost:66,
+    form:'trophy', color:'#CBA342',
+    description:'A gold-colored two-handled cup mounted on a dark base, with a blank plaque waiting for a winner\'s name.',
+    condition:'The finish is rubbed on one handle, the cup has a small dent, and the plaque carries no readable award or name.',
+    claim:'Seller says it was won fair and square, but cannot identify the competition. Solid gold has not been established.',
+    details:[
+      {id:'lie-beat',label:'Winning shape',text:'The tall cup and two handles give it the familiar shape of a prize, without identifying what contest it came from.',tags:['function','danger']},
+      {id:'gear-slip',label:'Dented cup',text:'A small dent interrupts the cup\'s rim. It remains suitable for display, but is not pristine.',tags:['function']},
+      {id:'solder-scar',label:'Handle wear',text:'The finish is worn where one handle meets the cup; the surface color alone cannot prove the metal is gold.',tags:['history']},
+      {id:'glass-window',label:'Blank plaque',text:'A pale rectangular plaque sits on the dark base with no legible winner or competition engraved on it.',tags:['aesthetic','rarity']},
+    ],
+  },
+  'hollow-room-camera': {
+    id:'hollow-room-camera', name:'Hollow Room Camera', model:'01-camera', cost:55,
+    form:'camera', color:'#4F5D75',
+    description:'A boxy movie camera with two reels and a projecting lens, associated with footage of rooms when nobody is inside.',
+    condition:'The lens is scratched, the film guide catches, and one reel turns unevenly. A full working film test is still needed.',
+    claim:'Seller says its footage shows rooms with every person missing. The unusual recording claim has not been independently verified.',
+    details:[
+      {id:'empty-frame',label:'Twin reels',text:'Two reels sit above the camera body. It records onto film rather than ejecting instant photographs.',tags:['function','rarity']},
+      {id:'crooked-eject',label:'Film guide',text:'The film guide catches and one reel turns unevenly, which could damage a strip of film.',tags:['function']},
+      {id:'lens-scratch',label:'Lens scratch',text:'Three faint scratches cross the lens and could affect the edges of a recorded image.',tags:['aesthetic','danger']},
+      {id:'hotel-sticker',label:'Underside mark',text:'A name is scratched into the underside, but the mark alone does not establish who currently owns the camera.',tags:['history','value']},
+    ],
+  },
+  'feathered-coil': {
+    id:'feathered-coil', name:'Winged Snake', model:'06-winged-snake', cost:75,
+    form:'snake', color:'#9B6039',
+    description:'A brown coiled snake figure with angular outstretched wings and bright yellow eyes.',
+    condition:'One wing tip is chipped and the uneven base lets the figure rock slightly.',
+    claim:'Seller says the winged snake was found rather than bought. Its origin and any living powers are unverified.',
+    details:[
+      {id:'feather-stone',label:'Angular wings',text:'Two angular wings spread from the raised snake, giving the small figure a broad silhouette.',tags:['aesthetic','rarity']},
+      {id:'missing-socket',label:'Open coil',text:'The body curls around an open center; nothing inside the coil identifies a maker or an owner.',tags:['history','value']},
+      {id:'chipped-wing',label:'Chipped wing',text:'One wing tip is chipped, and the uneven base makes the figure rock when touched.',tags:['danger','aesthetic']},
+      {id:'button-scratches',label:'Base scratches',text:'Small scratches underneath the coil show that the figure has stood on rough surfaces.',tags:['history']},
+    ],
+  },
+  'storm-globe': {
+    id:'storm-globe', name:'Storm Snow Globe', model:'07-storm-globe', cost:80,
+    form:'globe', color:'#9FB9C3',
+    description:'A glass globe on a wooden base containing dark little clouds and a bright lightning shape over pale ground.',
+    condition:'The glass is intact, with small scuffs on the wooden base. Keep the contained storm sealed inside.',
+    claim:'Seller describes a storm contained in the globe. Claims that it can control weather outside are unverified.',
+    details:[
+      {id:'contained-clouds',label:'Contained clouds',text:'Dark clouds occupy the enclosed glass globe above a pale ground layer.',tags:['function','rarity']},
+      {id:'lightning',label:'Lightning',text:'A bright yellow lightning shape stands out against the clouds inside the globe.',tags:['aesthetic','rarity']},
+      {id:'sealed-glass',label:'Sealed glass',text:'The glass dome has no opening intended for handling what is inside.',tags:['danger','function']},
+      {id:'wooden-base',label:'Wooden base',text:'The globe sits on a faceted wooden base with light wear around its lower edge.',tags:['history','value']},
+    ],
+  },
+  'laugh-jar': {
+    id:'laugh-jar', name:'Laugh Jar', model:'08-laugh-jar', cost:90,
+    form:'jar', color:'#B8C7C5',
+    description:'A clear corked jar with bright shapes suspended inside and an occasional giggle that has no visible speaker.',
+    condition:'The cork is seated firmly and the glass is intact. The giggling is intermittent, so it cannot be demonstrated on command.',
+    claim:'Seller says the jar contains laughter. The identity of any supposed laughing person is unknown.',
+    details:[
+      {id:'quiet-giggle',label:'Quiet giggle',text:'An occasional giggle can be heard near the closed jar, though no person is visible inside.',tags:['function','rarity']},
+      {id:'cork-seal',label:'Cork seal',text:'A broad cork sits in the mouth of the jar and keeps its contents enclosed.',tags:['danger','function']},
+      {id:'bright-shapes',label:'Bright shapes',text:'Small bright shapes hang against the clear glass, making the jar an unusual display piece.',tags:['aesthetic','rarity']},
+      {id:'unknown-source',label:'Unknown source',text:'No label identifies who made the jar or where its laughter came from.',tags:['history','value']},
+    ],
+  },
+  'house-less-door': {
+    id:'house-less-door', name:'Door With No House', model:'09-door', cost:100,
+    form:'door', color:'#805535',
+    description:'A brown paneled door in its own frame, complete with a small brass-colored handle and no surrounding house.',
+    condition:'The panels and frame are worn. It must be supported securely because there is no wall to hold it upright.',
+    claim:'Seller says it was found standing without a house. Claims that it leads somewhere impossible are unverified.',
+    details:[
+      {id:'complete-frame',label:'Complete frame',text:'The paneled door still has its frame even though there is no wall or house attached.',tags:['function','rarity']},
+      {id:'small-handle',label:'Small handle',text:'A small brass-colored handle sits to one side of the wooden panels.',tags:['function','aesthetic']},
+      {id:'unfixed-frame',label:'Unfixed frame',text:'With no wall anchoring the frame, the door needs support to stand safely.',tags:['danger','value']},
+      {id:'worn-panels',label:'Worn panels',text:'The wooden panels are scuffed, but there is no address or maker\'s label establishing their origin.',tags:['history','aesthetic']},
+    ],
+  },
+  'alien-egg': {
+    id:'alien-egg', name:'Alien Egg', model:'10-alien-egg', cost:110,
+    form:'egg', color:'#76479D',
+    description:'A purple egg-shaped object marked by bright green branching lines, resting in a shallow wooden cradle.',
+    condition:'The shell appears intact. Its contents are unknown; there has been no attempt to open it.',
+    claim:'It is called an alien egg, and Visitor says it belongs to them. No species or hatching date has been established.',
+    details:[
+      {id:'green-pattern',label:'Green pattern',text:'Bright green branching lines cross the purple outer shell.',tags:['aesthetic','rarity']},
+      {id:'intact-shell',label:'Intact shell',text:'The curved shell appears intact, with no opening that reveals what is inside.',tags:['function','danger']},
+      {id:'wooden-cradle',label:'Wooden cradle',text:'A shallow wooden cradle supports the egg and keeps it from rolling across the counter.',tags:['function','value']},
+      {id:'unknown-origin',label:'Unknown origin',text:'There is no maker\'s label or record explaining the egg\'s origin. Visitor has identified it as their own.',tags:['history','rarity']},
+    ],
+  },
+};
+
+export function getItem(id) { return Object.hasOwn(ITEMS,id)?ITEMS[id]:undefined; }

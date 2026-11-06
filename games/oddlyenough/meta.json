@@ -1,0 +1,169 @@
+{
+  "title": "ODDLY ENOUGH",
+  "handle": "oddlyenough",
+  "description": "Run a pawn shop for unlikely things. Meet an unusual cast, inspect oddities in 3D, and bargain by voice to buy low and sell high.",
+  "assets": [
+    {
+      "file": "assets/pawn-shop/characters/01-subway-guy.glb",
+      "source": "User-provided Pawn Shop Pack / 3d/characters/01-subway-guy.glb",
+      "license": "Project assets supplied by the team; no separate license supplied"
+    },
+    {
+      "file": "assets/pawn-shop/characters/02-suit-guy.glb",
+      "source": "User-provided Pawn Shop Pack / 3d/characters/02-suit-guy.glb",
+      "license": "Project assets supplied by the team; no separate license supplied"
+    },
+    {
+      "file": "assets/pawn-shop/characters/03-jacket-guy.glb",
+      "source": "User-provided Pawn Shop Pack / 3d/characters/03-jacket-guy.glb",
+      "license": "Project assets supplied by the team; no separate license supplied"
+    },
+    {
+      "file": "assets/pawn-shop/characters/04-hoodie-guy.glb",
+      "source": "User-provided Pawn Shop Pack / 3d/characters/04-hoodie-guy.glb",
+      "license": "Project assets supplied by the team; no separate license supplied"
+    },
+    {
+      "file": "assets/pawn-shop/characters/05-red-skirt-woman.glb",
+      "source": "User-provided Pawn Shop Pack / 3d/characters/05-red-skirt-woman.glb",
+      "license": "Project assets supplied by the team; no separate license supplied"
+    },
+    {
+      "file": "assets/pawn-shop/characters/06-jeans-woman.glb",
+      "source": "User-provided Pawn Shop Pack / 3d/characters/06-jeans-woman.glb",
+      "license": "Project assets supplied by the team; no separate license supplied"
+    },
+    {
+      "file": "assets/pawn-shop/characters/07-homeless-guy.glb",
+      "source": "User-provided Pawn Shop Pack / 3d/characters/07-homeless-guy.glb",
+      "license": "Project assets supplied by the team; no separate license supplied"
+    },
+    {
+      "file": "assets/pawn-shop/characters/08-fish-man.glb",
+      "source": "User-provided Pawn Shop Pack / 3d/characters/08-fish-man.glb",
+      "license": "Project assets supplied by the team; no separate license supplied"
+    },
+    {
+      "file": "assets/pawn-shop/characters/09-sack-head.glb",
+      "source": "User-provided Pawn Shop Pack / 3d/characters/09-sack-head.glb",
+      "license": "Project assets supplied by the team; no separate license supplied"
+    },
+    {
+      "file": "assets/pawn-shop/characters/10-grey-alien.glb",
+      "source": "User-provided Pawn Shop Pack / 3d/characters/10-grey-alien.glb",
+      "license": "Project assets supplied by the team; no separate license supplied"
+    },
+    {
+      "file": "assets/pawn-shop/items/01-camera.glb",
+      "source": "User-provided Pawn Shop Pack / 3d/items/01-camera.glb",
+      "license": "Project assets supplied by the team; no separate license supplied"
+    },
+    {
+      "file": "assets/pawn-shop/items/02-pocket-watch.glb",
+      "source": "User-provided Pawn Shop Pack / 3d/items/02-pocket-watch.glb",
+      "license": "Project assets supplied by the team; no separate license supplied"
+    },
+    {
+      "file": "assets/pawn-shop/items/03-guitar.glb",
+      "source": "User-provided Pawn Shop Pack / 3d/items/03-guitar.glb",
+      "license": "Project assets supplied by the team; no separate license supplied"
+    },
+    {
+      "file": "assets/pawn-shop/items/04-porcelain-cat.glb",
+      "source": "User-provided Pawn Shop Pack / 3d/items/04-porcelain-cat.glb",
+      "license": "Project assets supplied by the team; no separate license supplied"
+    },
+    {
+      "file": "assets/pawn-shop/items/05-gold-trophy.glb",
+      "source": "User-provided Pawn Shop Pack / 3d/items/05-gold-trophy.glb",
+      "license": "Project assets supplied by the team; no separate license supplied"
+    },
+    {
+      "file": "assets/pawn-shop/items/06-winged-snake.glb",
+      "source": "User-provided Pawn Shop Pack / 3d/items/06-winged-snake.glb",
+      "license": "Project assets supplied by the team; no separate license supplied"
+    },
+    {
+      "file": "assets/pawn-shop/items/07-storm-globe.glb",
+      "source": "User-provided Pawn Shop Pack / 3d/items/07-storm-globe.glb",
+      "license": "Project assets supplied by the team; no separate license supplied"
+    },
+    {
+      "file": "assets/pawn-shop/items/08-laugh-jar.glb",
+      "source": "User-provided Pawn Shop Pack / 3d/items/08-laugh-jar.glb",
+      "license": "Project assets supplied by the team; no separate license supplied"
+    },
+    {
+      "file": "assets/pawn-shop/items/09-door.glb",
+      "source": "User-provided Pawn Shop Pack / 3d/items/09-door.glb",
+      "license": "Project assets supplied by the team; no separate license supplied"
+    },
+    {
+      "file": "assets/pawn-shop/items/10-alien-egg.glb",
+      "source": "User-provided Pawn Shop Pack / 3d/items/10-alien-egg.glb",
+      "license": "Project assets supplied by the team; no separate license supplied"
+    },
+    {
+      "file": "assets/pawn-shop/store/pawn-shop.glb",
+      "source": "User-provided Pawn Shop Pack / store/pawn-shop.glb",
+      "license": "Project assets supplied by the team; no separate license supplied"
+    },
+    {
+      "file": "assets/fonts/archivo-black.ttf",
+      "source": "https://fonts.gstatic.com/s/archivoblack/v23/HTxqL289NzCGg4MzN6KJ7eW6OYs.ttf",
+      "license": "SIL Open Font License 1.1; license text included in assets/fonts/"
+    },
+    {
+      "file": "assets/fonts/ibm-plex-mono.ttf",
+      "source": "https://fonts.gstatic.com/s/ibmplexmono/v20/-F63fjptAgt5VM-kVkqdyU8n5ig.ttf",
+      "license": "SIL Open Font License 1.1; license text included in assets/fonts/"
+    },
+    {
+      "file": "assets/fonts/ibm-plex-mono-semibold.ttf",
+      "source": "https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3vAO8lc.ttf",
+      "license": "SIL Open Font License 1.1; license text included in assets/fonts/"
+    },
+    {
+      "file": "assets/fonts/vt323.ttf",
+      "source": "https://fonts.gstatic.com/s/vt323/v18/pxiKyp0ihIEF2hsY.ttf",
+      "license": "SIL Open Font License 1.1; license text included in assets/fonts/"
+    },
+    {
+      "file": "assets/fonts/archivoblack-OFL.txt",
+      "source": "https://github.com/Omnibus-Type/ArchivoBlack",
+      "license": "SIL Open Font License 1.1 \u2014 accompanying license text"
+    },
+    {
+      "file": "assets/fonts/ibmplexmono-OFL.txt",
+      "source": "https://github.com/IBM/plex",
+      "license": "SIL Open Font License 1.1 \u2014 accompanying license text"
+    },
+    {
+      "file": "assets/fonts/vt323-OFL.txt",
+      "source": "https://github.com/google/fonts/tree/main/ofl/vt323",
+      "license": "SIL Open Font License 1.1 \u2014 accompanying license text"
+    }
+  ],
+  "ai_assets": [
+    "shop-dressing.js",
+    "DEVELOPMENT.md",
+    "package.json",
+    "server.mjs",
+    "tests/bargaining.test.mjs",
+    "tests/catalog.test.mjs",
+    "tests/engine.test.mjs",
+    "tests/intent.test.mjs",
+    "tests/inventory-display.test.mjs",
+    "tests/microphone.test.mjs",
+    "tests/persistence.test.mjs",
+    "tests/progress.test.mjs",
+    "tests/prototype-ui.test.mjs",
+    "tests/prototype.test.mjs",
+    "tests/server-intent.test.mjs",
+    "tests/server.test.mjs",
+    "tests/speech-player.test.mjs",
+    "tests/speech.test.mjs",
+    "tests/state.test.mjs",
+    "tests/transcription.test.mjs"
+  ]
+}
