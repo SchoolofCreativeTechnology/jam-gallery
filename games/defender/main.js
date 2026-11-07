@@ -49,6 +49,18 @@ import {
   START_WAVE,
   WIN_WAVE,
   WAVE_PAUSE_SECONDS,
+  ABILITY_BOMB_COOLDOWN,
+  ABILITY_BOMB_DAMAGE,
+  ABILITY_RAPID_COOLDOWN,
+  ABILITY_RAPID_DURATION,
+  ABILITY_RAPID_MULTIPLIER,
+  ABILITY_HEAL_COOLDOWN,
+  ABILITY_HEAL_AMOUNT,
+  WALL_MAX_COUNT,
+  WALL_HP,
+  WALL_RADIUS,
+  WALL_MIN_PLACE_RADIUS,
+  WALL_MAX_PLACE_RADIUS,
 } from './tuning.js';
 import { getWavePlan, pickCorners } from './waves.js';
 import {
@@ -61,10 +73,14 @@ import {
   flashBaseDamage,
   showWaveAnnounce,
   hideWaveAnnounce,
+  showStartScreen,
+  hideStartScreen,
+  updateAbilityHUD,
+  updateWalls,
 } from './ui.js';
 import { groundTexture } from './textures.js';
 import { initAudio, playShoot, playHit, playDamage } from './sounds.js';
-import { makeTower, makeGoblin, makeArrow, TOWER_MUZZLE_HEIGHT, TOWER_MUZZLE_Z } from './art.js';
+import { makeArrow, makeWall } from './art.js';
 import { showAbilityPick, hideAbilityPick } from './abilities.js';
 
 // --- Abilities picked after boss waves; restart puts them all back ---
@@ -95,8 +111,8 @@ function resetAbilities() {
 
 // --- Shapes and offsets that are not tuning knobs ---
 const BASE_HEIGHT = 1;              // the loaded base model's deck top is y = 1, so the turret sits at y = 1
-const TURRET_MUZZLE_HEIGHT = TOWER_MUZZLE_HEIGHT; // arrows leave the tower's firing window
-const TURRET_MUZZLE_Z = TOWER_MUZZLE_Z;
+const TURRET_MUZZLE_HEIGHT = 1.65;  // firing window height on the loaded tower.glb
+const TURRET_MUZZLE_Z = 1.7;        // firing window distance forward on the loaded tower.glb
 const SHOT_RADIUS = 0.12;
 const HIT_FLASH_TIME = 0.15;        // seconds a drone stays "popped" after being hit
 const CORNER_INSET = 1.5;           // drones start this far in from the arena edge
@@ -106,12 +122,11 @@ const HIT_MARGIN = HIT_RADIUS - DRONE_RADIUS;
 const FIRE_CONE_RADIANS = (FIRE_CONE_DEGREES * Math.PI) / 180; // the tuning knob is in degrees
 
 // --- The loaded models ---
-const DRONE_MODEL_RADIUS = 1;         // drone.glb is about 1 unit in radius; enemies scale by radius / this
-const GLOW_MATERIAL = 'DroneGlow';    // the drone's emissive material; red enemies and the boss get a tinted copy
-const RED_GLOW_COLOR = '#b01508';
-const RED_GLOW_INTENSITY = 1.6;
-const BOSS_GLOW_COLOR = '#5c14a8';
-const BOSS_GLOW_INTENSITY = 1.8;
+const GARGOYLE_MODEL_RADIUS = 0.55;   // gargoyle.glb is about 0.55 units in radius
+const TROLL_MODEL_RADIUS = 0.7;       // troll.glb is about 0.7 units in radius
+const GLOW_MATERIAL = 'EyeGlow';      // gargoyle's emissive eye material; red enemies get a tinted copy
+const RED_GLOW_COLOR = '#ff2a1f';
+const RED_GLOW_INTENSITY = 2.0;
 
 // --- Dusk palette ---
 const SKY_COLOR = '#1b0e08';   // near-black with a hint of red: the rig lamps and the lasers do the lighting
@@ -125,32 +140,53 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 document.body.appendChild(renderer.domElement);
 
-// --- Scene and straight-down orthographic camera ---
+// --- Scene and cameras ---
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(SKY_COLOR);
 
-const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
-camera.position.set(0, 50, 0);
-camera.up.set(0, 0, -1);   // makes world -Z "up" on screen, so +X is right and +Z is down
-camera.lookAt(0, 0, 0);
+// Gameplay camera: straight-down orthographic, best for aiming.
+const orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
+orthoCamera.position.set(0, 50, 0);
+orthoCamera.up.set(0, 0, -1);   // makes world -Z "up" on screen, so +X is right and +Z is down
+orthoCamera.lookAt(0, 0, 0);
+
+// Art camera: perspective from behind the tower, better for seeing the models.
+const perspCamera = new THREE.PerspectiveCamera(50, 1, 0.1, 200);
+perspCamera.position.set(0, 18, 28);
+perspCamera.lookAt(0, 0, 0);
+perspCamera.up.set(0, 1, 0);
+
+let camera = orthoCamera;
+let perspectiveView = false;
 
 // Half the arena plus a 10% margin has to stay visible in both directions.
 const VIEW_HALF = (ARENA_SIZE / 2) * 1.1;
 
 function resize() {
   const aspect = innerWidth / innerHeight;
-  const halfWidth = aspect >= 1 ? VIEW_HALF * aspect : VIEW_HALF;
-  const halfHeight = aspect >= 1 ? VIEW_HALF : VIEW_HALF / aspect;
-  camera.left = -halfWidth;
-  camera.right = halfWidth;
-  camera.top = halfHeight;
-  camera.bottom = -halfHeight;
-  camera.updateProjectionMatrix();
-  camera.updateMatrixWorld(); // so Raycaster works even before the first render
+  if (perspectiveView) {
+    perspCamera.aspect = aspect;
+    perspCamera.updateProjectionMatrix();
+  } else {
+    const halfWidth = aspect >= 1 ? VIEW_HALF * aspect : VIEW_HALF;
+    const halfHeight = aspect >= 1 ? VIEW_HALF : VIEW_HALF / aspect;
+    orthoCamera.left = -halfWidth;
+    orthoCamera.right = halfWidth;
+    orthoCamera.top = halfHeight;
+    orthoCamera.bottom = -halfHeight;
+    orthoCamera.updateProjectionMatrix();
+  }
+  camera.updateMatrixWorld();
   renderer.setSize(innerWidth, innerHeight);
 }
 resize();
 addEventListener('resize', resize);
+
+function toggleCameraView() {
+  perspectiveView = !perspectiveView;
+  camera = perspectiveView ? perspCamera : orthoCamera;
+  resize();
+}
 
 // --- Lights: dusk. A dim warm sky, and a low sun so the rig and its enemies stay readable ---
 scene.add(new THREE.HemisphereLight(HEMI_SKY, HEMI_GROUND, 0.65));
@@ -187,9 +223,10 @@ turret.add(muzzle);
 const shotGeometry = new THREE.SphereGeometry(SHOT_RADIUS, 8, 6);
 const shotMaterial = new THREE.MeshBasicMaterial({ color: '#ffe57a' });
 
-// --- Enemies: every one is a clone of the loaded drone, scaled to its own size ---
+// --- Enemies: gargoyles for most, troll for the boss ---
 const gltfLoader = new GLTFLoader();
-let droneModel = null; // the loaded drone; set before the first wave spawns
+let gargoyleModel = null; // the loaded gargoyle; set before the first wave spawns
+let trollModel = null;    // the loaded troll boss
 
 // Every blue drone size in one table; spawnDroneAt copies a row onto the enemy object.
 const DRONE_VARIANTS = {
@@ -211,14 +248,14 @@ function tintGlow(root, color, intensity) {
   });
 }
 
-// One enemy mesh: a group holding a clone of the drone model, scaled so the model's unit radius
+// One enemy mesh: a group holding a clone of `model`, scaled so the model's natural radius
 // becomes `radius`. The group is what the game moves and pops, so the model's own scale stays put.
-function makeEnemyMesh(radius, glowColor, glowIntensity) {
+function makeEnemyMesh(model, modelRadius, radius, glowColor, glowIntensity) {
   const group = new THREE.Group();
-  const model = droneModel.clone(); // geometry and materials stay shared unless tinted
-  model.scale.setScalar(radius / DRONE_MODEL_RADIUS);
-  if (glowColor) tintGlow(model, glowColor, glowIntensity);
-  group.add(model);
+  const clone = model.clone(); // geometry and materials stay shared unless tinted
+  clone.scale.setScalar(radius / modelRadius);
+  if (glowColor) tintGlow(clone, glowColor, glowIntensity);
+  group.add(clone);
   return group;
 }
 
@@ -233,10 +270,17 @@ let waveCorners = [];                // [signX, signZ] corners this wave spawns 
 let cornerCursor = 0;                // which of those corners is next in line
 let gameOver = false;
 let won = false;                     // true once wave WIN_WAVE is cleared
+let runStarted = false;              // true once the player clicks through the start screen
 let runTime = 0;                     // seconds this run has lasted, stopped when it ends
 let firing = false;
 let fireCooldown = 0;
 let spawnTimer = 0;                  // counts down to the next drone of this wave
+
+// Active ability cooldowns (seconds remaining) and rapid-fire timer.
+let bombCooldown = 0;
+let rapidCooldown = 0;
+let healCooldown = 0;
+let rapidEndTime = 0;                // >0 while rapid fire is active
 
 // Every live enemy: blue (three sizes), red or boss. All carry { type, mesh, hp, hitFlash, hitRadius, radius }.
 // Blue adds: { variant, speed, heading, velocity, swerveTimer, dashTimer }
@@ -244,6 +288,8 @@ let spawnTimer = 0;                  // counts down to the next drone of this wa
 // Boss adds: { speed } and walks straight at the base.
 const drones = [];
 const shots = [];  // { mesh, direction, life }
+const walls = [];  // { mesh, hp, radius }
+let wallsRemaining = WALL_MAX_COUNT;
 
 // --- Mouse aim ---
 const pointer = new THREE.Vector2(0, 0);                  // mouse position in -1..1 screen space
@@ -267,6 +313,7 @@ addEventListener('pointermove', (event) => {
 addEventListener('pointerdown', (event) => {
   if (event.button !== 0) return; // left button only (right-click is for walls in M3)
   initAudio();                    // the first click is the gesture that starts the audio context
+  if (!runStarted) { startRun(); return; } // click through the title screen
   pointer.x = (event.clientX / innerWidth) * 2 - 1;
   pointer.y = -(event.clientY / innerHeight) * 2 + 1;
   updateAim();                    // face where the click/tap landed
@@ -281,10 +328,24 @@ addEventListener('pointerup', (event) => {
 });
 addEventListener('pointercancel', () => { firing = false; });
 addEventListener('blur', () => { firing = false; });          // no stuck trigger if the tab loses focus
-addEventListener('contextmenu', (event) => event.preventDefault());
+addEventListener('contextmenu', (event) => {
+  event.preventDefault();
+  if (!runStarted || gameOver || won || wallsRemaining <= 0) return;
+  initAudio();
+  updateAim();
+  tryPlaceWall(aimPoint.x, aimPoint.z);
+});
 
 addEventListener('keydown', (event) => {
-  if ((event.key === 'r' || event.key === 'R') && loadingEl.hidden) restart();
+  if (!loadingEl.hidden || event.repeat) return;
+  if (!runStarted && (event.key === ' ' || event.code === 'Space')) { startRun(); return; }
+  if (!runStarted) return;
+
+  if (event.key === 'r' || event.key === 'R') restart();
+  else if (event.key === ' ' || event.code === 'Space') useBomb();
+  else if (event.key === 'Shift') useRapid();
+  else if (event.key === 'h' || event.key === 'H') useHeal();
+  else if (event.key === 'v' || event.key === 'V') toggleCameraView();
 });
 
 // --- Shooting ---
@@ -319,7 +380,92 @@ function updateFiring(dt) {
   if (fireCooldown > 0) fireCooldown = Math.max(0, fireCooldown - dt);
   if (!firing || fireCooldown > 0) return;
   shoot();
-  fireCooldown = FIRE_COOLDOWN * cooldownScale;
+  const rapidScale = rapidEndTime > 0 ? ABILITY_RAPID_MULTIPLIER : 1;
+  fireCooldown = FIRE_COOLDOWN * cooldownScale * rapidScale;
+}
+
+// --- Active abilities ---
+
+function useBomb() {
+  if (bombCooldown > 0) return;
+  bombCooldown = ABILITY_BOMB_COOLDOWN;
+  // Wipe every non-boss enemy on screen. Bosses are too tough for the bomb.
+  for (let i = drones.length - 1; i >= 0; i--) {
+    if (drones[i].type === 'boss') continue;
+    scene.remove(drones[i].mesh);
+    drones.splice(i, 1);
+  }
+  playHit();
+  updateAbilityHUD({ bomb: bombCooldown, rapid: rapidCooldown, heal: healCooldown, rapidEndTime });
+}
+
+function useRapid() {
+  if (rapidCooldown > 0) return;
+  rapidCooldown = ABILITY_RAPID_COOLDOWN;
+  rapidEndTime = ABILITY_RAPID_DURATION;
+  updateAbilityHUD({ bomb: bombCooldown, rapid: rapidCooldown, heal: healCooldown, rapidEndTime });
+}
+
+function useHeal() {
+  if (healCooldown > 0) return;
+  healCooldown = ABILITY_HEAL_COOLDOWN;
+  baseHp = Math.min(maxHpNow, baseHp + ABILITY_HEAL_AMOUNT);
+  updateUI({ wave, hp: baseHp, maxHp: maxHpNow });
+  updateAbilityHUD({ bomb: bombCooldown, rapid: rapidCooldown, heal: healCooldown, rapidEndTime });
+}
+
+function updateAbilities(dt) {
+  let changed = false;
+  if (bombCooldown > 0) { bombCooldown = Math.max(0, bombCooldown - dt); changed = true; }
+  if (rapidCooldown > 0) { rapidCooldown = Math.max(0, rapidCooldown - dt); changed = true; }
+  if (healCooldown > 0) { healCooldown = Math.max(0, healCooldown - dt); changed = true; }
+  if (rapidEndTime > 0) {
+    rapidEndTime = Math.max(0, rapidEndTime - dt);
+    changed = true;
+  }
+  if (changed) updateAbilityHUD({ bomb: bombCooldown, rapid: rapidCooldown, heal: healCooldown, rapidEndTime });
+}
+
+function resetAbilityCooldowns() {
+  bombCooldown = 0;
+  rapidCooldown = 0;
+  healCooldown = 0;
+  rapidEndTime = 0;
+}
+
+// --- Walls ---
+
+function tryPlaceWall(x, z) {
+  const distance = Math.hypot(x, z);
+  if (distance < WALL_MIN_PLACE_RADIUS || distance > WALL_MAX_PLACE_RADIUS) return;
+
+  // Don't stack walls on top of each other.
+  for (const wall of walls) {
+    if (Math.hypot(wall.mesh.position.x - x, wall.mesh.position.z - z) < WALL_RADIUS * 2) return;
+  }
+
+  const mesh = makeWall();
+  mesh.position.set(x, 0, z);
+  scene.add(mesh);
+  walls.push({ mesh, hp: WALL_HP, radius: WALL_RADIUS });
+  wallsRemaining -= 1;
+  updateWalls(wallsRemaining);
+}
+
+function updateWallsState(dt) {
+  for (let i = walls.length - 1; i >= 0; i--) {
+    if (walls[i].hp > 0) continue;
+    scene.remove(walls[i].mesh);
+    walls.splice(i, 1);
+    wallsRemaining += 1;
+    updateWalls(wallsRemaining);
+  }
+}
+
+function resetWalls() {
+  for (const wall of walls) scene.remove(wall.mesh);
+  walls.length = 0;
+  wallsRemaining = WALL_MAX_COUNT;
 }
 
 function updateShots(dt) {
@@ -439,7 +585,7 @@ function isBossWave(number) {
 function spawnDroneAt(x, z, variantName) {
   const variant = DRONE_VARIANTS[variantName];
 
-  const mesh = makeEnemyMesh(variant.radius); // the model's own blue glow, scaled to this size
+  const mesh = makeEnemyMesh(gargoyleModel, GARGOYLE_MODEL_RADIUS, variant.radius); // blue gargoyle, scaled to this size
   mesh.position.set(x, DRONE_HOVER, z);
 
   const drone = {
@@ -482,7 +628,7 @@ function spawnEnemy(signX, signZ) {
 
 // A red enemy starts at a corner like a drone, then spirals in on its own path.
 function spawnRed(x, z) {
-  const mesh = makeEnemyMesh(RED_RADIUS, RED_GLOW_COLOR, RED_GLOW_INTENSITY);
+  const mesh = makeEnemyMesh(gargoyleModel, GARGOYLE_MODEL_RADIUS, RED_RADIUS, RED_GLOW_COLOR, RED_GLOW_INTENSITY);
   mesh.position.set(x, DRONE_HOVER, z);
 
   const red = {
@@ -502,7 +648,7 @@ function spawnRed(x, z) {
 
 // The boss: one big slow enemy that comes in from a corner and walks straight at the base.
 function spawnBoss(x, z) {
-  const mesh = makeEnemyMesh(BOSS_RADIUS, BOSS_GLOW_COLOR, BOSS_GLOW_INTENSITY);
+  const mesh = makeEnemyMesh(trollModel, TROLL_MODEL_RADIUS, BOSS_RADIUS);
   mesh.position.set(x, DRONE_HOVER, z);
 
   const boss = {
@@ -596,11 +742,28 @@ function updateDrones(dt) {
     else if (drone.type === 'boss') updateBoss(drone, dt);
     else updateBlue(drone, dt);
 
+    // Walls block enemies: push the drone back to the wall's edge and damage the wall.
+    for (const wall of walls) {
+      const dx = position.x - wall.mesh.position.x;
+      const dz = position.z - wall.mesh.position.z;
+      const wallDist = Math.hypot(dx, dz);
+      const minDist = drone.radius + wall.radius;
+      if (wallDist >= minDist) continue;
+      const overlap = minDist - wallDist;
+      const nx = wallDist > 0.001 ? dx / wallDist : 1;
+      const nz = wallDist > 0.001 ? dz / wallDist : 0;
+      position.x += nx * overlap;
+      position.z += nz * overlap;
+      wall.hp -= DRONE_DAMAGE * dt;
+    }
+
     // Shrink back down after a hit. Only the group is scaled: the model inside keeps its own size.
     if (drone.hitFlash > 0) drone.hitFlash = Math.max(0, drone.hitFlash - dt);
     const pop = 1 + 0.5 * (drone.hitFlash / HIT_FLASH_TIME);
     drone.mesh.scale.setScalar(pop);
   }
+
+  updateWallsState(dt);
 }
 
 // Blue drones of every size: erratic flight, a fresh zigzag direction every DRONE_SWERVE_INTERVAL
@@ -688,10 +851,13 @@ function restart() {
   shots.length = 0;
 
   resetAbilities();
+  resetAbilityCooldowns();
+  resetWalls();
   baseHp = BASE_HP;
   wave = START_WAVE;
   gameOver = false;
   won = false;
+  runStarted = true;
   runTime = 0;
   firing = false;
   fireCooldown = 0;
@@ -702,6 +868,7 @@ function restart() {
 
   hideGameOver();
   hideWin();
+  hideStartScreen();
   beginWavePause(START_WAVE); // a fresh pause, then the first wave (START_WAVE, for testing)
   updateUI({ wave, hp: baseHp, maxHp: maxHpNow });
 }
@@ -730,26 +897,39 @@ const loadingEl = document.getElementById('loading');
 function loadModels() {
   return Promise.all([
     gltfLoader.loadAsync('./assets/base.glb'),
-    gltfLoader.loadAsync('./assets/turret.glb'),
-    gltfLoader.loadAsync('./assets/drone.glb'),
+    gltfLoader.loadAsync('./assets/tower.glb'),
+    gltfLoader.loadAsync('./assets/gargoyle.glb'),
+    gltfLoader.loadAsync('./assets/troll.glb'),
   ]);
 }
 
+// Begin the first run after the player clicks or presses Space through the title screen.
+function startRun() {
+  if (runStarted) return;
+  runStarted = true;
+  hideStartScreen();
+  beginWavePause(START_WAVE);
+}
+
 async function start() {
-  const [baseGltf, turretGltf, droneGltf] = await loadModels();
+  const [baseGltf, towerGltf, gargoyleGltf, trollGltf] = await loadModels();
 
   const base = baseGltf.scene;  // 8 x 8, bottom face at y = 0, deck top at y = 1
   base.position.set(0, 0, 0);
   scene.add(base);
 
-  turret.add(makeTower());              // stone archer tower, pivot at the bottom centre
-  droneModel = makeGoblin(GLOW_MATERIAL); // every enemy is a goblin; red and boss get tinted eyes
+  const tower = towerGltf.scene;        // loaded medieval stone tower
+  turret.add(tower);
+  gargoyleModel = gargoyleGltf.scene;   // every enemy is a gargoyle; red ones get tinted eyes
+  trollModel = trollGltf.scene;         // the boss is a troll
 
   if (loadingEl) loadingEl.hidden = true;
 
   initUI();
   updateUI({ wave, hp: baseHp, maxHp: maxHpNow });
-  beginWavePause(START_WAVE); // open the run with the same pause every wave gets
+  updateAbilityHUD({ bomb: 0, rapid: 0, heal: 0, rapidEndTime: 0 });
+  updateWalls(wallsRemaining);
+  showStartScreen();               // wait for the player to click / press Space
   lastFrameTime = performance.now(); // so the first frame's delta is not the whole load time
   renderer.setAnimationLoop(frame);
 }
@@ -771,13 +951,14 @@ function frame() {
   updateFps(frameSeconds);
 
   updateAim();
-  if (!gameOver && !won) {
+  if (!gameOver && !won && runStarted) {
     runTime += dt;     // the run clock; it stops the moment the run ends either way
     updateWaves(dt);
     updateSpawning(dt);
     if (waveInProgress) updateFiring(dt); // no shooting during the pause
     updateShots(dt);   // shots first, so a hit pops the drone on the same frame
     updateDrones(dt);
+    updateAbilities(dt);
   }
 
   renderer.render(scene, camera);

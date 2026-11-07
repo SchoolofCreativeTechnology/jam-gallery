@@ -14,6 +14,21 @@ export function initUI() {
   el.win = document.getElementById('win-screen');
   el.winWave = document.getElementById('win-wave');
   el.winTime = document.getElementById('win-time');
+  el.start = document.getElementById('start-screen');
+  el.bomb = document.getElementById('ability-bomb');
+  el.rapid = document.getElementById('ability-rapid');
+  el.heal = document.getElementById('ability-heal');
+  el.walls = document.getElementById('wall-count');
+}
+
+// Show the title screen on first load.
+export function showStartScreen() {
+  el.start.hidden = false;
+}
+
+// Hide the title screen once the player starts the run.
+export function hideStartScreen() {
+  el.start.hidden = true;
 }
 
 // Draw the current run's numbers: the wave reached and how much base health is left.
@@ -64,4 +79,42 @@ export function flashBaseDamage() {
   el.flash.classList.remove('flash');
   void el.flash.offsetWidth; // reading the layout restarts the CSS animation
   el.flash.classList.add('flash');
+}
+
+// Update the ability readouts in the HUD: cooldown remaining or ready.
+export function updateAbilityHUD({ bomb, rapid, heal, rapidEndTime }) {
+  const readyClass = 'ready';
+
+  if (bomb === 0) {
+    el.bomb.textContent = 'Space: Bomb — ready';
+    el.bomb.classList.add(readyClass);
+  } else {
+    el.bomb.textContent = `Space: Bomb — ${bomb.toFixed(1)}s`;
+    el.bomb.classList.remove(readyClass);
+  }
+
+  if (rapidEndTime > 0) {
+    el.rapid.textContent = `Shift: Rapid — ${rapidEndTime.toFixed(1)}s`;
+    el.rapid.classList.add(readyClass);
+  } else if (rapid === 0) {
+    el.rapid.textContent = 'Shift: Rapid — ready';
+    el.rapid.classList.add(readyClass);
+  } else {
+    el.rapid.textContent = `Shift: Rapid — ${rapid.toFixed(1)}s`;
+    el.rapid.classList.remove(readyClass);
+  }
+
+  if (heal === 0) {
+    el.heal.textContent = 'H: Heal — ready';
+    el.heal.classList.add(readyClass);
+  } else {
+    el.heal.textContent = `H: Heal — ${heal.toFixed(1)}s`;
+    el.heal.classList.remove(readyClass);
+  }
+}
+
+// Update the wall counter in the HUD.
+export function updateWalls(remaining) {
+  if (!el.walls) return;
+  el.walls.textContent = `Walls: ${remaining}`;
 }

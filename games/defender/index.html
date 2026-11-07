@@ -21,6 +21,10 @@
       border-radius: 3px; background: rgba(0, 0, 0, 0.55); overflow: hidden; }
     #hp-bar { height: 100%; width: 100%; background: linear-gradient(90deg, #ff7a4d, #ffd98a); }
     #hp-label { font: 600 13px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; opacity: 0.9; }
+    #abilities { display: flex; gap: 14px; margin-left: auto; font: 600 13px/1.2 system-ui, sans-serif; }
+    #abilities span { opacity: 0.75; }
+    #abilities span.ready { opacity: 1; color: #ffd98a; }
+    #wall-count { color: #c9e4ff; font: 600 13px/1.2 system-ui, sans-serif; }
 
     /* Big "Wave N" in the middle of the screen, during the pause between waves. */
     #wave-announce { position: fixed; inset: 0; display: grid; place-content: center;
@@ -64,6 +68,16 @@
     #win-screen p { margin: 0; }
     #win-screen kbd { padding: 0 6px; border: 1px solid rgba(255, 255, 255, 0.4);
       border-radius: 4px; background: rgba(255, 255, 255, 0.12); font: inherit; }
+
+    /* Start screen: title and controls, shown until the player starts the run. */
+    #start-screen { position: fixed; inset: 0; display: grid; place-content: center; gap: 10px;
+      text-align: center; background: rgba(12, 7, 5, 0.88); color: #f6efe4; cursor: pointer;
+      font: 16px/1.5 system-ui, sans-serif; z-index: 10; }
+    #start-screen[hidden] { display: none; }
+    #start-screen h1 { margin: 0 0 8px; font-size: clamp(44px, 8vw, 72px); letter-spacing: 0.1em; color: #ffd98a; }
+    #start-screen p { margin: 0; opacity: 0.85; }
+    #start-screen kbd { padding: 0 6px; border: 1px solid rgba(255, 255, 255, 0.4);
+      border-radius: 4px; background: rgba(255, 255, 255, 0.12); font: inherit; }
   </style>
   <!-- three.js comes from a CDN, pinned to one version. No install needed. -->
   <script type="importmap">
@@ -96,6 +110,12 @@
     <div>Wave <span id="wave-value">1</span></div>
     <div id="hp-wrap"><div id="hp-bar"></div></div>
     <div id="hp-label">HP 100 / 100</div>
+    <div id="abilities">
+      <span id="ability-bomb">Space: Bomb — ready</span>
+      <span id="ability-rapid">Shift: Rapid — ready</span>
+      <span id="ability-heal">H: Heal — ready</span>
+    </div>
+    <div id="wall-count">Walls: 3</div>
   </div>
   <div id="wave-announce" hidden>Wave 1</div>
   <div id="damage-flash"></div>
@@ -109,6 +129,15 @@
     <p>You held the rig through <strong>wave <span id="win-wave">20</span></strong>.</p>
     <p>Time: <strong><span id="win-time">0.0s</span></strong></p>
     <p>Press <kbd>R</kbd> to restart.</p>
+  </div>
+
+  <!-- Start screen: title and controls, shown until the player clicks or presses Space. -->
+  <div id="start-screen">
+    <h1>BASE DEFENDER</h1>
+    <p>Hold the rig through <strong>20 waves</strong>.</p>
+    <p>Move the mouse to aim. Hold <kbd>left click</kbd> to fire arrows.</p>
+    <p><kbd>Right click</kbd> the sand to place a wall (3 max). Press <kbd>V</kbd> to toggle camera view.</p>
+    <p>Click or press <kbd>Space</kbd> to start.</p>
   </div>
 
   <!-- If three.js (from the internet) or main.js fails to load, say so instead of showing a blank page. -->

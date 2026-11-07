@@ -1,11 +1,12 @@
 {
   "title": "Base Defender",
   "handle": "defender",
-  "description": "A top-down wave defense game on a desert oil rig at dusk. Hold off drones, red spirals and bosses until wave 20.",
+  "description": "A top-down medieval wave defense game. Hold off gargoyles, red spirals and troll bosses from a stone archer tower until wave 20.",
   "assets": [],
   "ai_assets": [
     "assets/base.glb",
-    "assets/turret.glb",
-    "assets/drone.glb"
+    "assets/tower.glb",
+    "assets/gargoyle.glb",
+    "assets/troll.glb"
   ]
 }

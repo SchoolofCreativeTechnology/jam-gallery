@@ -115,6 +115,21 @@ export function makeGoblin(glowName) {
   return goblin;
 }
 
+// Wall: a short stone pillar the player places to block enemies.
+export function makeWall() {
+  const wall = new THREE.Group();
+  const pillar = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.1, 1.6, 8), stone);
+  pillar.position.y = 0.8;
+  wall.add(pillar);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.15, 0.2, 8), slate);
+  cap.position.y = 1.7;
+  wall.add(cap);
+  const mossPatch = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.05, 0.15, 8), moss);
+  mossPatch.position.y = 0.08;
+  wall.add(mossPatch);
+  return wall;
+}
+
 // Arrow: a pale shaft with a grey tip and white fletching, pointing along +Z.
 const shaftMat = new THREE.MeshBasicMaterial({ color: '#f1e3c2' });
 const tipMat = new THREE.MeshBasicMaterial({ color: '#d7dde3' });

@@ -79,3 +79,22 @@ export const WAVE_PLANS = [
   { startWave: 10, endWave: 14, corners: 3, minEnemies: 9, maxEnemies: 14 },
   { startWave: 15, endWave: Infinity, corners: 4, minEnemies: 11, maxEnemies: 16 },
 ];
+
+// --- Active abilities ---
+// Three once-per-cooldown powers activated with keys. They add burst options without
+// replacing the one-action loop of aiming and shooting.
+export const ABILITY_BOMB_COOLDOWN = 12;       // seconds before the bomb can be used again
+export const ABILITY_BOMB_DAMAGE = 1000;       // enough to one-shot non-boss enemies
+export const ABILITY_RAPID_COOLDOWN = 15;      // seconds before rapid fire can be used again
+export const ABILITY_RAPID_DURATION = 3;       // seconds rapid fire lasts
+export const ABILITY_RAPID_MULTIPLIER = 0.4;   // fire cooldown is multiplied by this (lower = faster)
+export const ABILITY_HEAL_COOLDOWN = 20;       // seconds before heal can be used again
+export const ABILITY_HEAL_AMOUNT = 30;         // HP restored, capped at max HP
+
+// --- Walls ---
+// Right-click the sand to place a stone wall. Walls block enemies and soak damage.
+export const WALL_MAX_COUNT = 3;               // how many walls the player can have at once
+export const WALL_HP = 50;                     // damage a wall can take before crumbling
+export const WALL_RADIUS = 1.0;                // collision radius of a wall
+export const WALL_MIN_PLACE_RADIUS = 7;        // walls can't be placed closer than this to the base
+export const WALL_MAX_PLACE_RADIUS = 18;       // walls can't be placed outside this ring
