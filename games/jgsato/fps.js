@@ -13,7 +13,8 @@ export function initFPS() {
   panel = document.createElement('div');
   panel.id = 'fps';
   panel.style.position = 'fixed';
-  panel.style.top = '8px';
+  panel.style.bottom = '8px';
+  panel.style.whiteSpace = 'pre';
   panel.style.left = '8px';
   panel.style.padding = '6px 10px';
   panel.style.borderRadius = '4px';

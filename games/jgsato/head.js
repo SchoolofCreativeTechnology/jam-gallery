@@ -1,434 +1,565 @@
-// Jambi's head: a heavy, slippery sphere you steer by momentum, with an upright face that leans as it rolls.
-
+// Jambi's head: a heavy, slippery glass ball you steer by momentum. Inside, his head floats
+// upright as if suspended in oil: it turns to look where he's sliding and leans as he speeds up.
 import * as THREE from 'three';
 import * as tuning from './tuning.js';
-import { getPathHeight, getPathTangentAndSlope } from './path.js';
+import { nearest, getCourse, RAIL_RADIUS, RAIL_HEIGHT } from './path.js';
 
-// --- The face panel ---
-const FACE_DEPTH = 0.2; // thickness of the face plate, as a fraction of the radius
-
-// The most the face is ever allowed to lean (radians, about 29 degrees).
-// Well under 45, so a hard stop can never tip it over or roll it round.
-const MAX_LEAN = 0.5;
-
-// The face starts looking down the path (-Z), which is where the run begins.
-const START_YAW = Math.PI;
-
-// How hard the void pulls once the head is off the path.
-const FALL_GRAVITY = tuning.rules.gravity;
-
-// Long frames are split into steps this long, so the face spring can't blow up.
-const MAX_STEP = 1 / 60;
+const MAX_STEP = 1 / 120; // long frames are split into steps this long, so nothing tunnels
+const SKIN = '#6dae48';
 
 export function createHead(scene) {
-  const radius = tuning.head.radius;
-
+  const r = tuning.head.radius;
   const group = new THREE.Group();
 
-  // The head itself: a clear shell so the face and turban inside are visible. The roll is
-  // read from the drifting movement, not from marks on the sphere.
-  const sphere = new THREE.Mesh(
-    new THREE.SphereGeometry(radius, 24, 16),
-    new THREE.MeshStandardMaterial({
-      color: '#ffffff',
-      transparent: true,
-      opacity: 0.25,
-      roughness: 0.05,
-      metalness: 0.1,
+  // ---- The glass ball: a clear shell with a soft outline so it reads on any background ----
+  const glass = new THREE.Mesh(
+    new THREE.SphereGeometry(r, 40, 28),
+    new THREE.MeshPhysicalMaterial({
+      color: '#e9fbff', transparent: true, opacity: 0.24, roughness: 0.03, metalness: 0,
+      clearcoat: 1, clearcoatRoughness: 0.04, envMapIntensity: 1.6, depthWrite: false,
     })
   );
-  group.add(sphere);
+  glass.castShadow = true;
+  glass.renderOrder = 2;
+  group.add(glass);
 
-  // The face is a sibling of the sphere, never its child, so it can never
-  // inherit a spin: we set its rotation ourselves, every frame.
-  // It sits at the centre of the sphere, suspended like a head in oil.
-  const depth = radius * FACE_DEPTH;
-  const faceW = radius * tuning.head.faceWidth;
-  const faceH = radius * tuning.head.faceHeight;
-  const faceTexture = createFaceTexture(false);
-  const scaredTexture = createFaceTexture(true);
-  const faceMaterial = new THREE.MeshStandardMaterial({ map: faceTexture, roughness: 0.8 });
-  const face = new THREE.Mesh(
-    new THREE.BoxGeometry(faceW, faceH, depth),
-    faceMaterial
+  const outline = new THREE.Mesh(
+    new THREE.SphereGeometry(r * 1.045, 32, 20),
+    new THREE.MeshBasicMaterial({ color: '#ffffff', side: THREE.BackSide, transparent: true, opacity: 0.55, depthWrite: false })
   );
-  face.position.z = 0; // centred in the clear sphere
-  face.rotation.order = 'YXZ'; // lean first, about the travel direction, then yaw
-  group.add(face);
+  outline.renderOrder = 1;
+  group.add(outline);
 
-  // Turban and earrings are siblings of the sphere so they do not spin with the face.
-  group.add(createTurban(radius));
+  // A glint that stays put while the ball rolls, so the glass always looks like glass.
+  const glint = new THREE.Mesh(
+    new THREE.SphereGeometry(r * 0.16, 12, 8),
+    new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.8, depthWrite: false })
+  );
+  glint.scale.set(1, 0.55, 0.5);
+  glint.position.set(-r * 0.42, r * 0.62, r * 0.38);
+  glint.rotation.z = 0.6;
+  glint.renderOrder = 3;
+  group.add(glint);
 
-  const earringGeo = new THREE.SphereGeometry(radius * 0.08, 12, 10);
-  const earringMat = new THREE.MeshStandardMaterial({
-    color: '#ffd700',
-    metalness: 0.6,
-    roughness: 0.25,
-  });
-  const leftEarring = new THREE.Mesh(earringGeo, earringMat);
-  leftEarring.position.set(-radius * 0.92, -radius * 0.15, -radius * 0.05);
-  group.add(leftEarring);
-  const rightEarring = new THREE.Mesh(earringGeo, earringMat);
-  rightEarring.position.set(radius * 0.92, -radius * 0.15, -radius * 0.05);
-  group.add(rightEarring);
-
+  // ---- The bust: his head, turban and earrings, never spun by the roll ----
+  const faces = {
+    neutral: faceTexture('neutral'),
+    scared: faceTexture('scared'),
+    happy: faceTexture('happy'),
+    dizzy: faceTexture('dizzy'),
+  };
+  const bust = createBust(r, faces.neutral);
+  group.add(bust.root);
   scene.add(group);
 
-  // --- State ---
-  let velX = 0, velZ = 0, velY = 0; // world units per second
-  let lean = 0, leanVel = 0;        // the face's tilt, and how fast that tilt is changing
-  let yaw = START_YAW;
-  let scaredTimer = 0;              // how long the scared face stays on
+  // ---- State ----
+  let velX = 0, velZ = 0, velY = 0;
+  let prevVX = 0, prevVZ = 0;
+  let leanX = 0, leanZ = 0, leanVX = 0, leanVZ = 0;
+  let yaw = 0;
+  let expressionTimer = 0;
+  let expression = 'neutral';
+  let spin = 0;
+  let homeAnim = null;
+  let wasOnEdge = false;
+  let lastS = 0;
+  let landed = false;
 
-  // Trail droplets: independent scene objects that fade out behind the head.
-  const trail = [];
-  let trailAccumulator = 0;
+  const railStop = Math.sqrt(Math.max(0, (r + RAIL_RADIUS) ** 2 - (RAIL_HEIGHT - r) ** 2));
+
+  // ---- Speed trail: a small pool of fading droplets ----
   const trailGeo = new THREE.SphereGeometry(tuning.head.trailSize, 8, 6);
+  const trail = [];
+  for (let i = 0; i < 14; i++) {
+    const mesh = new THREE.Mesh(trailGeo, new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false }));
+    mesh.visible = false;
+    scene.add(mesh);
+    trail.push({ mesh, life: 0 });
+  }
+  let trailNext = 0;
+  let trailClock = 0;
 
   const api = {
     group,
     isFalling: false,
-    onShove: null, // main.js sets this to hook camera shake + scare
-    update,
-    reset,
-    startFalling,
-    shove,
-    scare,
+    isHome: false,
+    fellOff: false,
+    onShove: null, // main.js hooks these for shake, sound and particles
+    onBonk: null,
+    onLand: null,
+    get velocity() { return { x: velX, z: velZ }; },
+    get speed() { return Math.hypot(velX, velZ); },
+    get progress() { return lastS; },
+    update, reset, shove, scare, express, goHome,
   };
 
-  // Back to the start line: on the ground, still, face upright and looking ahead.
-  function reset(startX, startZ) {
-    const startY = getPathHeight(startX, startZ);
-    group.position.set(startX, startY + radius, startZ);
-    velX = velZ = velY = 0;
-    lean = leanVel = 0;
-    yaw = START_YAW;
-    face.rotation.set(0, yaw, 0);
+  function reset(x, z) {
+    const n = nearest(x, z);
+    group.position.set(x, n.y + r, z);
+    velX = velZ = velY = prevVX = prevVZ = 0;
+    leanX = leanZ = leanVX = leanVZ = 0;
+    yaw = 0;
+    spin = 0;
+    lastS = n.s;
     api.isFalling = false;
-    scaredTimer = 0;
-    setNeutralFace();
-    clearTrail();
-  }
-
-  function startFalling() {
-    if (api.isFalling) return;
-    api.isFalling = true;
-    velY = 0;
+    api.isHome = false;
+    api.fellOff = false;
+    landed = false;
+    homeAnim = null;
+    bust.root.position.set(0, 0, 0);
+    bust.root.scale.setScalar(1);
+    bust.root.rotation.set(-tuning.head.faceUp, 0, 0);
+    glass.visible = outline.visible = glint.visible = true;
+    express('neutral', 0);
+    for (const t of trail) { t.life = 0; t.mesh.visible = false; }
   }
 
   function shove(dx, dz) {
-    if (api.isFalling) return;
+    if (api.isFalling || api.isHome) return;
     velX += dx;
     velZ += dz;
-    const speed = Math.hypot(velX, velZ);
-    const max = tuning.head.maxSpeed;
-    if (speed > max) {
-      const scale = max / speed;
-      velX *= scale;
-      velZ *= scale;
-    }
+    capSpeed();
+    scare();
     if (api.onShove) api.onShove();
+  }
+
+  function scare() {
+    express('scared', tuning.head.scaredDuration);
+  }
+
+  // Swap his face. A timed face falls back to neutral when it runs out; 0 means hold it.
+  function express(name, seconds) {
+    expression = name;
+    expressionTimer = seconds;
+    bust.setFace(faces[name]);
+  }
+
+  // Reached the box: glide over it, then sink in.
+  function goHome(box) {
+    api.isHome = true;
+    homeAnim = { t: 0, from: group.position.clone(), to: new THREE.Vector3(box.x, box.y, box.z) };
+    express('happy', 0);
   }
 
   function update(dt, moveX, moveZ) {
     if (!(dt > 0)) return;
 
-    // The scared face counts down in real frame time, not sub-steps.
-    if (scaredTimer > 0) {
-      scaredTimer -= dt;
-      if (scaredTimer <= 0) setNeutralFace();
+    if (expressionTimer > 0) {
+      expressionTimer -= dt;
+      if (expressionTimer <= 0 && !api.isFalling && !api.isHome) express('neutral', 0);
     }
 
-    const steps = Math.min(8, Math.max(1, Math.ceil(dt / MAX_STEP)));
-    const h = dt / steps;
-    for (let i = 0; i < steps; i++) step(h, moveX, moveZ);
+    if (homeAnim) {
+      updateHome(dt);
+    } else {
+      const steps = Math.min(16, Math.max(1, Math.ceil(dt / MAX_STEP)));
+      const h = dt / steps;
+      for (let i = 0; i < steps; i++) step(h, moveX, moveZ);
+    }
 
+    updateBust(dt);
     updateTrail(dt);
   }
 
+  function capSpeed() {
+    const speed = Math.hypot(velX, velZ);
+    const max = tuning.head.maxSpeed;
+    if (speed > max) {
+      velX *= max / speed;
+      velZ *= max / speed;
+    }
+  }
+
+  // ---- PHYSICS ----
   function step(dt, moveX, moveZ) {
+    const p = group.position;
     if (api.isFalling) {
-      // The head keeps its horizontal momentum and sails forward while falling.
-      group.position.x += velX * dt;
-      group.position.z += velZ * dt;
-
-      // Gravity only. Input no longer steers.
-      velY -= FALL_GRAVITY * dt;
-      group.position.y += velY * dt;
-    } else {
-      // Snap to the path surface so slope is read from where we are.
-      const pathHeight = getPathHeight(group.position.x, group.position.z);
-      group.position.y = pathHeight + radius;
-
-      // Gravity along the slope: downhill (negative slope forward) speeds up,
-      // uphill slows down. Applied before input so the terrain owns the baseline.
-      const { tx, tz, slope } = getPathTangentAndSlope(group.position.x, group.position.z);
-      velX += -slope * tuning.rules.slopeGravity * tx * dt;
-      velZ += -slope * tuning.rules.slopeGravity * tz * dt;
-
-      // Input is acceleration, never position: the head has to be told to slow
-      // down, which is the whole slippery feel.
-      velX += clamp(moveX, -1, 1) * tuning.head.accel * dt;
-      velZ += clamp(moveZ, -1, 1) * tuning.head.accel * dt;
-
-      // Drag, applied as an exact decay so the feel doesn't change with frame rate.
-      const keep = Math.exp(-tuning.head.drag * dt);
-      velX *= keep;
-      velZ *= keep;
-
-      // Cap the speed.
-      const speed = Math.hypot(velX, velZ);
-      const max = tuning.head.maxSpeed;
-      if (speed > max) {
-        const scale = max / speed;
-        velX *= scale;
-        velZ *= scale;
+      // Off the deck: keep the momentum, gravity takes over, no more steering.
+      p.x += velX * dt;
+      p.z += velZ * dt;
+      velY -= tuning.rules.gravity * dt;
+      p.y += velY * dt;
+      spin += dt * (landed ? 2 : 9);
+      // Land on the stage floor far below, bounce, and lie there seeing stars.
+      const floor = getCourse().bounds.floorY + r;
+      if (p.y < floor) {
+        p.y = floor;
+        if (!landed && api.onLand) api.onLand(Math.abs(velY));
+        landed = true;
+        velY = Math.abs(velY) > 2 ? -velY * 0.42 : 0;
+        velX *= 0.6;
+        velZ *= 0.6;
       }
-
-      group.position.x += velX * dt;
-      group.position.z += velZ * dt;
-      // Height is set from the path at the start of the frame.
+      if (landed) {
+        const keep = Math.exp(-3 * dt);
+        velX *= keep;
+        velZ *= keep;
+      }
+      return;
     }
 
-    updateFace(dt);
+    const here = nearest(p.x, p.z);
+    p.y = here.y + r;
+
+    // Gravity along the slope: downhill speeds up, uphill slows down.
+    velX += -here.slope * tuning.rules.slopeGravity * here.tx * dt;
+    velZ += -here.slope * tuning.rules.slopeGravity * here.tz * dt;
+
+    // Input is acceleration, never position: you have to ask him to slow down.
+    velX += moveX * tuning.head.accel * dt;
+    velZ += moveZ * tuning.head.accel * dt;
+
+    const keep = Math.exp(-tuning.head.drag * dt);
+    velX *= keep;
+    velZ *= keep;
+    capSpeed();
+
+    p.x += velX * dt;
+    p.z += velZ * dt;
+
+    // Rails, and the walls at either end of the deck.
+    const n = nearest(p.x, p.z);
+    const limit = n.w - railStop;
+    if ((n.lat > limit && n.railR) || (n.lat < -limit && n.railL)) {
+      const side = Math.sign(n.lat);
+      const over = n.lat - limit * side;
+      p.x -= n.rx * over;
+      p.z -= n.rz * over;
+      const out = (velX * n.rx + velZ * n.rz) * side;
+      if (out > 0) {
+        velX -= n.rx * side * out * (1 + tuning.head.railBounce);
+        velZ -= n.rz * side * out * (1 + tuning.head.railBounce);
+        if (out > 1.5 && api.onBonk) api.onBonk(out);
+      }
+    }
+    // The ends of the deck act like walls a little inside the edge, so the ball never overhangs.
+    const endMargin = r * 0.6;
+    const back = n.behind + Math.max(0, endMargin - n.s);
+    const front = n.beyond + Math.max(0, n.s - (getCourse().length - endMargin));
+    for (const [over, dir] of [[back, 1], [front, -1]]) {
+      if (over <= 0) continue;
+      p.x += n.tx * over * dir;
+      p.z += n.tz * over * dir;
+      const into = -(velX * n.tx + velZ * n.tz) * dir;
+      if (into > 0) {
+        velX += n.tx * into * dir * (1 + tuning.head.railBounce);
+        velZ += n.tz * into * dir * (1 + tuning.head.railBounce);
+        if (into > 1.5 && api.onBonk) api.onBonk(into);
+      }
+    }
+    lastS = n.s;
+
+    // Teetering on an open edge: he notices.
+    const open = n.lat > 0 ? !n.railR : !n.railL;
+    const edge = open && Math.abs(n.lat) > n.w - r * 0.35;
+    if (edge && !wasOnEdge && expression === 'neutral') express('scared', 0.5);
+    wasOnEdge = edge;
+
+    // Over the edge.
+    if (open && Math.abs(n.lat) > n.w + tuning.head.edgeGrace) {
+      api.isFalling = true;
+      api.fellOff = true;
+      velY = 1.2;
+      express('dizzy', 0);
+    }
   }
 
-  function scare() {
-    scaredTimer = tuning.head.scaredDuration;
-    faceMaterial.map = scaredTexture;
-    faceMaterial.needsUpdate = true;
+  function updateHome(dt) {
+    homeAnim.t += dt;
+    const t = homeAnim.t;
+    const p = group.position;
+    const { from, to } = homeAnim;
+    if (t < 0.45) {
+      // Hop up and over to the box.
+      const k = t / 0.45;
+      const e = 1 - (1 - k) * (1 - k);
+      p.x = from.x + (to.x - from.x) * e;
+      p.z = from.z + (to.z - from.z) * e;
+      p.y = from.y + (to.y + 1.6 - from.y) * e + Math.sin(k * Math.PI) * 1.2;
+    } else {
+      // Sink into it, shrinking a touch as the glass slips under the rim.
+      const k = Math.min(1, (t - 0.45) / 0.5);
+      p.x = to.x;
+      p.z = to.z;
+      p.y = to.y + 1.6 - k * 1.5;
+      if (k >= 1) glass.visible = outline.visible = glint.visible = false;
+    }
+    velX = velZ = 0;
   }
 
-  function setNeutralFace() {
-    faceMaterial.map = faceTexture;
-    faceMaterial.needsUpdate = true;
+  // ---- THE FACE IN THE OIL ----
+  function updateBust(dt) {
+    // He looks the way he's sliding, sideways mostly, because forward is away from the camera.
+    const targetYaw = clamp(velX * tuning.head.turn, -tuning.head.maxTurn, tuning.head.maxTurn);
+    yaw += (targetYaw - yaw) * (1 - Math.exp(-6 * dt));
+
+    // He leans against any change in speed, then the oil brings him back upright.
+    const ax = (velX - prevVX) / dt;
+    const az = (velZ - prevVZ) / dt;
+    prevVX = velX;
+    prevVZ = velZ;
+    const k = tuning.head.wobbleSpring;
+    const targetX = clamp(-ax * tuning.head.wobble * 0.1, -tuning.head.maxLean, tuning.head.maxLean);
+    const targetZ = clamp(az * tuning.head.wobble * 0.1, -tuning.head.maxLean, tuning.head.maxLean);
+    leanVX += (k * k * (targetX - leanX) - 2 * k * 0.55 * leanVX) * dt;
+    leanVZ += (k * k * (targetZ - leanZ) - 2 * k * 0.55 * leanVZ) * dt;
+    leanX = clamp(leanX + leanVX * dt, -tuning.head.maxLean, tuning.head.maxLean);
+    leanZ = clamp(leanZ + leanVZ * dt, -tuning.head.maxLean, tuning.head.maxLean);
+
+    bust.root.rotation.set(-tuning.head.faceUp + leanZ, yaw + spin, leanX + Math.sin(spin * 0.7) * (spin > 0 ? 0.6 : 0));
   }
 
   function updateTrail(dt) {
-    // Spawn a droplet when moving quickly on the path.
     const speed = Math.hypot(velX, velZ);
-    if (!api.isFalling && speed > 1) {
-      trailAccumulator += dt;
-      while (trailAccumulator >= tuning.head.trailInterval) {
-        trailAccumulator -= tuning.head.trailInterval;
-        spawnTrailDroplet();
+    if (!api.isFalling && !api.isHome && speed > 4) {
+      trailClock += dt;
+      while (trailClock >= tuning.head.trailInterval) {
+        trailClock -= tuning.head.trailInterval;
+        const t = trail[trailNext];
+        trailNext = (trailNext + 1) % trail.length;
+        t.life = tuning.head.trailLife;
+        t.mesh.visible = true;
+        t.mesh.position.copy(group.position);
+        t.mesh.position.y -= r * 0.55;
       }
     } else {
-      // Don't let a long stall dump a burst of droplets later.
-      trailAccumulator = 0;
+      trailClock = 0;
     }
-
-    // Age out existing droplets.
-    for (let i = trail.length - 1; i >= 0; i--) {
-      const drop = trail[i];
-      drop.life -= dt;
-      if (drop.life <= 0) {
-        scene.remove(drop.mesh);
-        trail.splice(i, 1);
-      } else {
-        const t = drop.life / drop.maxLife;
-        drop.mesh.scale.setScalar(t);
-        drop.mesh.material.opacity = t * tuning.head.trailOpacity;
-      }
+    for (const t of trail) {
+      if (t.life <= 0) continue;
+      t.life -= dt;
+      if (t.life <= 0) { t.mesh.visible = false; continue; }
+      const k = t.life / tuning.head.trailLife;
+      t.mesh.scale.setScalar(k);
+      t.mesh.material.opacity = k * tuning.head.trailOpacity;
     }
-  }
-
-  function spawnTrailDroplet() {
-    const material = new THREE.MeshBasicMaterial({
-      color: tuning.head.trailColor,
-      transparent: true,
-      opacity: tuning.head.trailOpacity,
-    });
-    const mesh = new THREE.Mesh(trailGeo, material);
-    mesh.position.copy(group.position);
-    mesh.position.y -= radius * 0.4; // slightly below the sphere centre
-    scene.add(mesh);
-    trail.push({ mesh, life: tuning.head.trailLife, maxLife: tuning.head.trailLife });
-  }
-
-  function clearTrail() {
-    for (const drop of trail) scene.remove(drop.mesh);
-    trail.length = 0;
-    trailAccumulator = 0;
-  }
-
-  function updateFace(dt) {
-    const speed = Math.hypot(velX, velZ);
-
-    // Turn the face the way the head is travelling, easing in. Ignore it when
-    // it has all but stopped, so a slow drift can't swing the face about.
-    if (speed > 0.05) {
-      const heading = Math.atan2(velX, velZ); // the face's forward is its local +Z
-      yaw += shortestAngle(yaw, heading) * (1 - Math.exp(-tuning.head.faceDamping * dt));
-    }
-
-    // The lean follows how fast the head is going the way the face points, so
-    // sliding sideways doesn't tilt it. At full speed it leans right back.
-    const forward = velX * Math.sin(yaw) + velZ * Math.cos(yaw);
-    const target = tuning.head.faceWobble * clamp(forward / tuning.head.maxSpeed, -1, 1);
-
-    // A damped spring: speed up towards the target, and brake on the way.
-    // Critical damping, so it leans back on a push and settles without wobbling.
-    const stiffness = tuning.head.faceDamping * tuning.head.faceDamping;
-    const brake = 2 * tuning.head.faceDamping;
-    leanVel += (stiffness * (target - lean) - brake * leanVel) * dt;
-    lean += leanVel * dt;
-
-    // Whatever the spring does, it never tips over, and it always comes back up.
-    if (lean > MAX_LEAN) {
-      lean = MAX_LEAN;
-      leanVel = 0;
-    } else if (lean < -MAX_LEAN) {
-      lean = -MAX_LEAN;
-      leanVel = 0;
-    }
-
-    // Base tilt angles the face up toward the camera; the lean adds more tilt
-    // when the head accelerates.
-    face.rotation.set(-lean + tuning.head.faceTilt, yaw, 0);
   }
 
   reset(0, 0);
   return api;
 }
 
-// Signed angle from a to b, wrapped to [-PI, PI], so the face takes the short way round.
-function shortestAngle(a, b) {
-  return Math.atan2(Math.sin(b - a), Math.cos(b - a));
+// ---- MODEL ----
+// His head is a slightly tall sphere with the face painted on the front; the turban, jewel
+// and gold hoops sit on it. Everything is a child of `root`, which the code turns and tilts.
+function createBust(r, faceMap) {
+  const root = new THREE.Group();
+  const headR = r * 0.52;
+
+  const skin = new THREE.MeshStandardMaterial({ map: faceMap, roughness: 0.6 });
+  const head = new THREE.Mesh(new THREE.SphereGeometry(headR, 40, 28), skin);
+  head.scale.set(1, 1.08, 0.96);
+  head.position.y = -r * 0.08;
+  head.castShadow = false;
+  root.add(head);
+
+  const ears = new THREE.MeshStandardMaterial({ color: SKIN, roughness: 0.6 });
+  for (const side of [-1, 1]) {
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(headR * 0.24, 12, 8), ears);
+    ear.scale.set(0.5, 1, 0.8);
+    ear.position.set(side * headR * 0.98, -r * 0.08, -headR * 0.05);
+    root.add(ear);
+  }
+
+  const magenta = new THREE.MeshStandardMaterial({ color: '#ff2a6d', roughness: 0.75 });
+  const purple = new THREE.MeshStandardMaterial({ color: '#9d4edd', roughness: 0.75 });
+  const gold = new THREE.MeshStandardMaterial({ color: '#ffd23d', metalness: 0.75, roughness: 0.22 });
+
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(headR * 1.02, 28, 16, 0, Math.PI * 2, 0, Math.PI * 0.5), purple);
+  dome.scale.set(1, 0.95, 0.98);
+  dome.position.y = r * 0.12;
+  root.add(dome);
+
+  const bands = [[1.0, 0.2, 0.1, magenta], [0.9, 0.17, 0.25, purple], [0.72, 0.15, 0.38, magenta]];
+  for (const [rad, tube, y, mat] of bands) {
+    const band = new THREE.Mesh(new THREE.TorusGeometry(headR * rad, headR * tube, 12, 36), mat);
+    band.rotation.x = Math.PI / 2;
+    band.position.y = r * y;
+    root.add(band);
+  }
+  const knot = new THREE.Mesh(new THREE.SphereGeometry(headR * 0.24, 14, 10), magenta);
+  knot.position.set(0, r * 0.5, -headR * 0.15);
+  root.add(knot);
+
+  const jewel = new THREE.Mesh(new THREE.OctahedronGeometry(headR * 0.2), new THREE.MeshStandardMaterial({
+    color: '#05d9e8', emissive: '#05d9e8', emissiveIntensity: 0.35, metalness: 0.3, roughness: 0.1,
+  }));
+  jewel.scale.set(0.8, 1.1, 0.5);
+  jewel.position.set(0, r * 0.2, headR * 0.98);
+  root.add(jewel);
+  const setting = new THREE.Mesh(new THREE.TorusGeometry(headR * 0.2, headR * 0.05, 8, 20), gold);
+  setting.position.set(0, r * 0.2, headR * 0.96);
+  root.add(setting);
+
+  for (const side of [-1, 1]) {
+    const hoop = new THREE.Mesh(new THREE.TorusGeometry(headR * 0.2, headR * 0.05, 8, 20), gold);
+    hoop.position.set(side * headR * 1.0, -r * 0.33, 0);
+    hoop.rotation.y = Math.PI / 2;
+    root.add(hoop);
+  }
+
+  return {
+    root,
+    setFace(map) {
+      if (skin.map !== map) {
+        skin.map = map;
+        skin.needsUpdate = true;
+      }
+    },
+  };
 }
 
-// Build a cartoon Jambi face texture so you can read which way the head is
-// facing and which way it leans. `scared` widens the eyes and opens the mouth.
-function createFaceTexture(scared = false) {
-  const size = 256;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
+// ---- FACE TEXTURES ----
+// Painted on an equirectangular canvas: the front of the sphere (+z) is at u = 0.25.
+function faceTexture(kind) {
+  const W = 1024, H = 512;
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const ctx = c.getContext('2d');
 
-  // Green Jambi skin with rounded corners.
-  ctx.fillStyle = '#6dae48';
-  roundRect(ctx, 0, 0, size, size, size * 0.18);
-  ctx.fill();
+  ctx.fillStyle = SKIN;
+  ctx.fillRect(0, 0, W, H);
+  // Soft shading: lighter at the cheeks, darker toward the back.
+  const glow = ctx.createRadialGradient(256, 270, 20, 256, 270, 300);
+  glow.addColorStop(0, 'rgba(190,240,140,0.55)');
+  glow.addColorStop(1, 'rgba(190,240,140,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, H);
 
-  // Expressive eyes, high on the face.
-  const eyeY = size * 0.38;
-  const eyeW = scared ? size * 0.22 : size * 0.18;
-  const eyeH = scared ? size * 0.28 : size * 0.22;
-  drawEye(ctx, size * 0.32, eyeY, eyeW, eyeH);
-  drawEye(ctx, size * 0.68, eyeY, eyeW, eyeH);
+  const cx = 256;
+  const eyeY = 228;
+  const eyeDX = 68;
+  const ink = '#2a1630';
 
-  // Eyebrows.
-  ctx.lineWidth = size * 0.04;
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = '#2e5a16';
-  ctx.beginPath();
-  ctx.arc(size * 0.32, eyeY - size * 0.18, size * 0.14, 0.2, Math.PI - 0.2);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(size * 0.68, eyeY - size * 0.18, size * 0.14, 0.2, Math.PI - 0.2);
-  ctx.stroke();
-
-  if (scared) {
-    // Open oval mouth for the scared face.
-    ctx.fillStyle = '#3a1f1f';
+  // Rosy cheeks.
+  ctx.fillStyle = 'rgba(255,110,140,0.35)';
+  for (const s of [-1, 1]) {
     ctx.beginPath();
-    ctx.ellipse(size * 0.5, size * 0.72, size * 0.16, size * 0.2, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx + s * 100, 300, 34, 22, 0, 0, Math.PI * 2);
     ctx.fill();
-  } else {
-    // A small dark smile beneath the eyes.
-    ctx.lineWidth = size * 0.045;
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = '#3a1f1f';
+  }
+
+  // Brows.
+  ctx.strokeStyle = '#24480f';
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 15;
+  for (const s of [-1, 1]) {
     ctx.beginPath();
-    ctx.arc(size * 0.5, size * 0.68, size * 0.18, 0.2 * Math.PI, 0.8 * Math.PI);
+    if (kind === 'scared') {
+      ctx.moveTo(cx + s * 30, eyeY - 82);
+      ctx.quadraticCurveTo(cx + s * 70, eyeY - 108, cx + s * 110, eyeY - 80);
+    } else if (kind === 'dizzy') {
+      ctx.moveTo(cx + s * 30, eyeY - 62);
+      ctx.lineTo(cx + s * 108, eyeY - 76);
+    } else {
+      ctx.moveTo(cx + s * 30, eyeY - 66);
+      ctx.quadraticCurveTo(cx + s * 70, eyeY - 92, cx + s * 110, eyeY - 62);
+    }
     ctx.stroke();
   }
 
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
-}
+  // Eyes.
+  for (const s of [-1, 1]) {
+    const x = cx + s * eyeDX;
+    if (kind === 'happy') {
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = 13;
+      ctx.beginPath();
+      ctx.arc(x, eyeY + 12, 30, Math.PI * 1.1, Math.PI * 1.9);
+      ctx.stroke();
+    } else if (kind === 'dizzy') {
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = 9;
+      ctx.beginPath();
+      for (let a = 0; a < Math.PI * 5; a += 0.2) {
+        const rad = 3 + a * 2.2;
+        const px = x + Math.cos(a * s) * rad, py = eyeY + Math.sin(a * s) * rad;
+        if (a === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    } else {
+      const big = kind === 'scared';
+      const ew = big ? 44 : 38, eh = big ? 54 : 44;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(x, eyeY, ew, eh, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = ink;
+      ctx.stroke();
+      ctx.fillStyle = ink;
+      ctx.beginPath();
+      ctx.ellipse(x + s * 4, eyeY + 6, big ? 12 : 18, big ? 15 : 22, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(x + s * 4 + 7, eyeY - 4, big ? 5 : 7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
 
-function createTurban(radius) {
-  const turban = new THREE.Group();
-
-  const magenta = new THREE.MeshStandardMaterial({ color: '#ff2a6d', roughness: 0.9 });
-  const purple = new THREE.MeshStandardMaterial({ color: '#9d4edd', roughness: 0.9 });
-  const gold = new THREE.MeshStandardMaterial({
-    color: '#ffd700',
-    metalness: 0.6,
-    roughness: 0.25,
-  });
-
-  const band1 = new THREE.Mesh(
-    new THREE.TorusGeometry(radius * 0.88, radius * 0.18, 12, 32),
-    magenta
-  );
-  band1.rotation.x = Math.PI / 2;
-  band1.position.y = radius * 0.12;
-  turban.add(band1);
-
-  const band2 = new THREE.Mesh(
-    new THREE.TorusGeometry(radius * 0.8, radius * 0.14, 12, 32),
-    purple
-  );
-  band2.rotation.x = Math.PI / 2;
-  band2.position.y = radius * 0.3;
-  turban.add(band2);
-
-  const band3 = new THREE.Mesh(
-    new THREE.TorusGeometry(radius * 0.66, radius * 0.11, 12, 32),
-    magenta
-  );
-  band3.rotation.x = Math.PI / 2;
-  band3.position.y = radius * 0.46;
-  turban.add(band3);
-
-  const jewel = new THREE.Mesh(
-    new THREE.SphereGeometry(radius * 0.12, 16, 12),
-    gold
-  );
-  jewel.position.set(0, radius * 0.22, -radius * 0.82);
-  turban.add(jewel);
-
-  return turban;
-}
-
-function drawEye(ctx, x, y, w, h) {
-  // Sclera.
-  ctx.fillStyle = '#ffffff';
+  // Nose.
+  ctx.fillStyle = 'rgba(40,90,20,0.45)';
   ctx.beginPath();
-  ctx.ellipse(x, y, w / 2, h / 2, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx, 286, 18, 13, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Pupil.
-  ctx.fillStyle = '#000000';
-  ctx.beginPath();
-  ctx.ellipse(x, y + h * 0.05, w * 0.22, h * 0.28, 0, 0, Math.PI * 2);
-  ctx.fill();
+  // Mustache: a curly genie flourish.
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = 11;
+  for (const s of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(cx, 312);
+    ctx.bezierCurveTo(cx + s * 30, 300, cx + s * 64, 320, cx + s * 78, 302);
+    ctx.quadraticCurveTo(cx + s * 88, 288, cx + s * 74, 284);
+    ctx.stroke();
+  }
 
-  // Highlight.
-  ctx.fillStyle = '#ffffff';
+  // Mouth.
+  ctx.fillStyle = '#5a1a2a';
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = 9;
   ctx.beginPath();
-  ctx.arc(x + w * 0.08, y - h * 0.12, w * 0.08, 0, Math.PI * 2);
-  ctx.fill();
-}
+  if (kind === 'scared') {
+    ctx.ellipse(cx, 362, 26, 34, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  } else if (kind === 'happy') {
+    ctx.moveTo(cx - 62, 338);
+    ctx.quadraticCurveTo(cx, 420, cx + 62, 338);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#ff7a93';
+    ctx.beginPath();
+    ctx.ellipse(cx, 376, 24, 12, 0, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (kind === 'dizzy') {
+    ctx.moveTo(cx - 50, 356);
+    for (let i = 0; i <= 10; i++) ctx.lineTo(cx - 50 + i * 10, 356 + (i % 2 ? -10 : 8));
+    ctx.stroke();
+  } else {
+    ctx.moveTo(cx - 44, 346);
+    ctx.quadraticCurveTo(cx, 384, cx + 44, 346);
+    ctx.stroke();
+  }
 
-function roundRect(ctx, x, y, w, h, r) {
+  // A little pointed goatee.
+  ctx.fillStyle = ink;
   ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.moveTo(cx - 14, 404);
+  ctx.quadraticCurveTo(cx, 452, cx + 2, 470);
+  ctx.quadraticCurveTo(cx + 8, 440, cx + 14, 404);
   ctx.closePath();
+  ctx.fill();
+
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
 }
 
-function clamp(value, min, max) {
-  return value < min ? min : value > max ? max : value;
+function clamp(v, lo, hi) {
+  return v < lo ? lo : v > hi ? hi : v;
 }
