@@ -1,275 +1,453 @@
-// Builds the ribbon of path the head rolls along, and answers "is this point on it?".
+// The deck the head rolls along: built from a course's centre line (levels.js), and the
+// one place that answers "where is the deck here, how wide, how steep, is there a rail?".
+// The mesh and the collision come from the same samples, so what you see is what you hit.
 import * as THREE from 'three';
-import * as tuning from './tuning.js';
 
-// Playhouse ramp colours.
-const RAIL_COLOR = '#ff2a6d';
-const SIDE_COLOR = '#4a5568';
-const STRIPE_COLORS = ['#ff2a6d', '#f7e600', '#05d9e8', '#9d4edd'];
-const STRIPE_WIDTH = 1.2;
-const MARKER_COLOR = '#e08a3c';
-const MARKER_SIZE = 1.5;
-const CHEVRON_COLOR = 0xf7e600;
-const CHEVRON_SPACING = 1.8;
+// ---- SHAPE ----
+const SPACING = 0.3;       // centre-line sample spacing, in world units
+export const THICKNESS = 0.6;
+const TILE = 1.3;          // world units per deck tile
+const CURB_WIDTH = 0.26;   // the red-and-white warning stripe along open edges
+export const RAIL_RADIUS = 0.12;
+export const RAIL_HEIGHT = 0.3;
+const POST_SPACING = 1.4;
+const LEG_SPACING = 4.5;
+const LEG_RADIUS = 0.14;
 
-const points = tuning.path.points;
+// ---- PALETTE: a calm deck, loud edges ----
+const DECK_A = '#fdf3dc';
+const DECK_B = '#eadcf7';
+const GROUT = '#c9b5e2';
+const CURB_RED = '#ff2a6d';
+const CURB_WHITE = '#fff8ee';
+const SIDE_TRIM = '#ffcb2e';
+const RAIL_COLOR = '#19d3e6';
+const POST_COLOR = '#ffcb2e';
+const LEG_COLOR = '#05d9e8';
 
-// The spawn point: the first centre-line point.
-export const pathStart = { x: points[0].x, z: points[0].z };
+// ---- COURSE: centre-line samples ----
+let C = null;
 
-// The goal: the last centre-line point, where his box sits.
-export const goalPosition = { x: points[points.length - 1].x, z: points[points.length - 1].z };
-
-// One flat box per segment, plus a square patch under each point so corners meet
-// cleanly and the slab is never narrower than the point's own half-width.
-export function createPath(scene) {
-  const group = new THREE.Group();
-  const sideMaterial = new THREE.MeshStandardMaterial({ color: SIDE_COLOR });
-  const thickness = tuning.path.thickness;
-  // The top surface follows the path elevation; the slab centre hangs half its thickness below.
-  const centreYOffset = -thickness / 2;
-  const chevronGeo = createChevronGeometry();
-  const chevronMat = new THREE.MeshStandardMaterial({
-    color: CHEVRON_COLOR,
-    emissive: CHEVRON_COLOR,
-    emissiveIntensity: 0.35,
-    roughness: 0.6,
-  });
-
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i];
-    const b = points[i + 1];
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const dz = b.z - a.z;
-    const horizontalLength = Math.hypot(dx, dz);
-    if (horizontalLength === 0) continue;
-
-    // A box can't taper, so the slab takes the average of the two half-widths.
-    const halfWidth = (a.halfWidth + b.halfWidth) / 2;
-    const length3D = Math.hypot(horizontalLength, dy);
-
-    const topTexture = createStripeTexture();
-    topTexture.wrapS = THREE.RepeatWrapping;
-    topTexture.wrapT = THREE.RepeatWrapping;
-    topTexture.repeat.set(1, length3D / (STRIPE_COLORS.length * STRIPE_WIDTH));
-    topTexture.colorSpace = THREE.SRGBColorSpace;
-    const topMaterial = new THREE.MeshStandardMaterial({ map: topTexture, roughness: 0.8 });
-    const materials = [
-      sideMaterial, // +x
-      sideMaterial, // -x
-      topMaterial,  // +y top
-      sideMaterial, // -y bottom
-      sideMaterial, // +z
-      sideMaterial, // -z
-    ];
-
-    const slab = new THREE.Mesh(
-      new THREE.BoxGeometry(halfWidth * 2, thickness, length3D),
-      materials
-    );
-    // The box's local +z is its length; lookAt pitches it along the segment.
-    slab.position.set((a.x + b.x) / 2, (a.y + b.y) / 2 + centreYOffset, (a.z + b.z) / 2);
-    slab.lookAt(b.x, b.y, b.z);
-    group.add(slab);
-
-    // Chevron arrows on slopes, pointing downhill.
-    const slope = dy / horizontalLength;
-    if (Math.abs(slope) > 0.05) {
-      const arrowCount = Math.floor(length3D / CHEVRON_SPACING);
-      for (let i = 0; i < arrowCount; i++) {
-        const arrow = new THREE.Mesh(chevronGeo, chevronMat);
-        arrow.position.set(0, thickness / 2 + 0.02, -length3D / 2 + CHEVRON_SPACING * (i + 0.5));
-        if (b.y > a.y) {
-          arrow.rotation.y = Math.PI;
-        }
-        slab.add(arrow);
-      }
-    }
-
-    // Thin edge rails just above the path surface, following the segment pitch.
-    const railGeo = new THREE.BoxGeometry(0.12, 0.12, length3D);
-    const railMat = new THREE.MeshStandardMaterial({ color: RAIL_COLOR, roughness: 0.4 });
-    const railY = thickness / 2 + 0.12 / 2;
-
-    const leftRail = new THREE.Mesh(railGeo, railMat);
-    leftRail.position.set(halfWidth, railY, 0);
-    slab.add(leftRail);
-
-    const rightRail = new THREE.Mesh(railGeo, railMat);
-    rightRail.position.set(-halfWidth, railY, 0);
-    slab.add(rightRail);
-  }
-
-  for (let i = 0; i < points.length; i++) {
-    const p = points[i];
-    const patchSize = p.halfWidth * 2;
-
-    const topTexture = createStripeTexture();
-    topTexture.wrapS = THREE.RepeatWrapping;
-    topTexture.wrapT = THREE.RepeatWrapping;
-    topTexture.repeat.set(1, patchSize / (STRIPE_COLORS.length * STRIPE_WIDTH));
-    topTexture.colorSpace = THREE.SRGBColorSpace;
-    const topMaterial = new THREE.MeshStandardMaterial({ map: topTexture, roughness: 0.8 });
-    const materials = [
-      sideMaterial, // +x
-      sideMaterial, // -x
-      topMaterial,  // +y top
-      sideMaterial, // -y bottom
-      sideMaterial, // +z
-      sideMaterial, // -z
-    ];
-
-    const patch = new THREE.Mesh(
-      new THREE.BoxGeometry(patchSize, thickness, patchSize),
-      materials
-    );
-    patch.position.set(p.x, p.y + centreYOffset, p.z);
-
-    // Keep stripes running along the path through corners.
-    if (i < points.length - 1) {
-      const next = points[i + 1];
-      patch.lookAt(next.x, next.y, next.z);
-    } else if (i > 0) {
-      const prev = points[i - 1];
-      patch.lookAt(prev.x, prev.y, prev.z);
-    }
-    group.add(patch);
-  }
-
-  // A plain cube standing in for where his box will be. No win logic yet.
-  const marker = new THREE.Mesh(
-    new THREE.BoxGeometry(MARKER_SIZE, MARKER_SIZE, MARKER_SIZE),
-    new THREE.MeshStandardMaterial({ color: MARKER_COLOR })
+// Sample a course's centre line into a smooth spline. Sets it as the current course.
+export function buildCourse(level) {
+  const pts = level.points;
+  const n = pts.length;
+  const curve = new THREE.CatmullRomCurve3(
+    pts.map((p) => new THREE.Vector3(p[0], p[2], p[1])), false, 'centripetal'
   );
-  marker.position.set(goalPosition.x, points[points.length - 1].y + MARKER_SIZE / 2, goalPosition.z); // resting on the path
-  group.add(marker);
+  const xs = [], ys = [], zs = [], ws = [], rl = [], rr = [], seg = [], segF = [];
+  const v = new THREE.Vector3();
+  for (let i = 0; i < n - 1; i++) {
+    const a = pts[i];
+    const b = pts[i + 1];
+    const steps = Math.max(4, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / SPACING));
+    const last = i === n - 2;
+    for (let k = 0; k <= (last ? steps : steps - 1); k++) {
+      const f = k / steps;
+      curve.getPoint((i + f) / (n - 1), v);
+      xs.push(v.x); ys.push(v.y); zs.push(v.z);
+      const e = f * f * (3 - 2 * f);
+      ws.push(a[3] + (b[3] - a[3]) * e);
+      rl.push(a[4].includes('L'));
+      rr.push(a[4].includes('R'));
+      seg.push(i);
+      segF.push(f);
+    }
+  }
 
-  scene.add(group);
+  const N = xs.length;
+  const s = new Float32Array(N);
+  const tx = new Float32Array(N);
+  const tz = new Float32Array(N);
+  const slope = new Float32Array(N);
+  for (let k = 1; k < N; k++) s[k] = s[k - 1] + Math.hypot(xs[k] - xs[k - 1], zs[k] - zs[k - 1]);
+  for (let k = 0; k < N; k++) {
+    const a = Math.max(0, k - 1);
+    const b = Math.min(N - 1, k + 1);
+    const dx = xs[b] - xs[a];
+    const dz = zs[b] - zs[a];
+    const h = Math.hypot(dx, dz) || 1;
+    tx[k] = dx / h;
+    tz[k] = dz / h;
+    slope[k] = (ys[b] - ys[a]) / h;
+  }
+
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity, minY = Infinity;
+  for (let k = 0; k < N; k++) {
+    minX = Math.min(minX, xs[k] - ws[k]); maxX = Math.max(maxX, xs[k] + ws[k]);
+    minZ = Math.min(minZ, zs[k] - ws[k]); maxZ = Math.max(maxZ, zs[k] + ws[k]);
+    minY = Math.min(minY, ys[k]);
+  }
+
+  C = {
+    level, N, xs, ys, zs, ws, rl, rr, seg, segF, s, tx, tz, slope,
+    length: s[N - 1],
+    start: { x: xs[0], y: ys[0], z: zs[0] },
+    end: { x: xs[N - 1], y: ys[N - 1], z: zs[N - 1] },
+    bounds: { minX, maxX, minZ, maxZ, minY, floorY: minY - 4.2 },
+  };
+  return C;
+}
+
+export function getCourse() {
+  return C;
+}
+
+// Distance along the course of a level-data position: [segment, fraction].
+export function distanceAt(at) {
+  const [i, f] = at;
+  for (let k = 0; k < C.N - 1; k++) {
+    if (C.seg[k] !== i) continue;
+    const f0 = C.segF[k];
+    const f1 = C.seg[k + 1] === i ? C.segF[k + 1] : 1;
+    if (f <= f1 + 1e-6) {
+      const t = f1 > f0 ? (f - f0) / (f1 - f0) : 0;
+      return C.s[k] + (C.s[k + 1] - C.s[k]) * Math.min(1, Math.max(0, t));
+    }
+  }
+  return C.length;
+}
+
+// The deck at a distance along the course: centre, height, width, direction, rails.
+export function frameAt(dist) {
+  const s = C.s;
+  let lo = 0, hi = C.N - 1;
+  dist = Math.min(C.length, Math.max(0, dist));
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (s[mid] <= dist) lo = mid; else hi = mid;
+  }
+  const span = s[hi] - s[lo];
+  const t = span > 0 ? (dist - s[lo]) / span : 0;
+  const lerp = (arr) => arr[lo] + (arr[hi] - arr[lo]) * t;
+  const tx = lerp(C.tx), tz = lerp(C.tz);
+  const h = Math.hypot(tx, tz) || 1;
+  return {
+    x: lerp(C.xs), y: lerp(C.ys), z: lerp(C.zs), w: lerp(C.ws),
+    tx: tx / h, tz: tz / h, rx: -tz / h, rz: tx / h,
+    railL: C.rl[lo], railR: C.rr[lo], s: dist,
+  };
+}
+
+// ---- COLLISION QUERIES ----
+// The nearest point on the centre line to (x, z), with everything the physics needs.
+// lat is the signed sideways offset: positive is to the right of the direction of travel.
+export function nearest(x, z) {
+  const { xs, zs, N } = C;
+  let best = Infinity, bk = 0, bf = 0, braw = 0;
+  for (let k = 0; k < N - 1; k++) {
+    const ax = xs[k], az = zs[k];
+    const dx = xs[k + 1] - ax, dz = zs[k + 1] - az;
+    const lenSq = dx * dx + dz * dz;
+    const raw = lenSq > 0 ? ((x - ax) * dx + (z - az) * dz) / lenSq : 0;
+    const f = raw < 0 ? 0 : raw > 1 ? 1 : raw;
+    const px = ax + dx * f - x, pz = az + dz * f - z;
+    const d2 = px * px + pz * pz;
+    if (d2 < best) { best = d2; bk = k; bf = f; braw = raw; }
+  }
+  const k = bk, f = bf;
+  const dx = xs[k + 1] - xs[k], dz = zs[k + 1] - zs[k];
+  const len = Math.hypot(dx, dz) || 1;
+  const tx = dx / len, tz = dz / len;
+  const rx = -tz, rz = tx;
+  const cx = xs[k] + dx * f, cz = zs[k] + dz * f;
+  return {
+    k, f,
+    x: cx, z: cz,
+    y: C.ys[k] + (C.ys[k + 1] - C.ys[k]) * f,
+    w: C.ws[k] + (C.ws[k + 1] - C.ws[k]) * f,
+    s: C.s[k] + (C.s[k + 1] - C.s[k]) * f,
+    slope: C.slope[k] + (C.slope[k + 1] - C.slope[k]) * f,
+    tx, tz, rx, rz,
+    lat: (x - cx) * rx + (z - cz) * rz,
+    railL: C.rl[k], railR: C.rr[k],
+    behind: k === 0 && braw < 0 ? -braw * len : 0,
+    beyond: k === N - 2 && braw > 1 ? (braw - 1) * len : 0,
+  };
+}
+
+export function getPathHeight(x, z) {
+  return nearest(x, z).y;
+}
+
+// ---- MESH ----
+const textureCache = {};
+function cachedTexture(key, make) {
+  if (!textureCache[key]) textureCache[key] = make();
+  return textureCache[key];
+}
+
+// Build the deck, its curbs, rails, side walls and support legs for the current course.
+export function createPathMesh(anisotropy = 1) {
+  const group = new THREE.Group();
+  const floorY = C.bounds.floorY;
+
+  const deckTex = cachedTexture('deck', deckTexture);
+  deckTex.anisotropy = anisotropy;
+  const curbTex = cachedTexture('curb', curbTexture);
+  curbTex.anisotropy = anisotropy;
+  const sideTex = cachedTexture('side', sideTexture);
+
+  const deckMat = new THREE.MeshStandardMaterial({ map: deckTex, roughness: 0.55, metalness: 0.0 });
+  const curbMat = new THREE.MeshStandardMaterial({
+    map: curbTex, roughness: 0.5, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  });
+  const sideMat = new THREE.MeshStandardMaterial({ map: sideTex, roughness: 0.7 });
+  const bottomMat = new THREE.MeshStandardMaterial({ color: '#3a1a5c', roughness: 0.9 });
+
+  const all = () => true;
+  const w = (k) => C.ws[k];
+
+  // Top surface: square tiles, laid in world units so they never stretch.
+  const deck = new THREE.Mesh(ribbon(
+    (k) => -w(k), (k) => w(k), () => 0, () => 0,
+    (k) => [-w(k) / TILE, C.s[k] / TILE], (k) => [w(k) / TILE, C.s[k] / TILE], all
+  ), deckMat);
+  deck.receiveShadow = true;
+  group.add(deck);
+
+  // Curbs on the open (railless) edges: the hard line Marble Madness taught everyone to fear.
+  const curbV = (k) => C.s[k] / 0.8;
+  const leftCurb = new THREE.Mesh(ribbon(
+    (k) => -w(k), (k) => -w(k) + CURB_WIDTH, () => 0.004, () => 0.004,
+    (k) => [0, curbV(k)], (k) => [1, curbV(k)], (k) => !C.rl[k]
+  ), curbMat);
+  const rightCurb = new THREE.Mesh(ribbon(
+    (k) => w(k) - CURB_WIDTH, (k) => w(k), () => 0.004, () => 0.004,
+    (k) => [0, curbV(k)], (k) => [1, curbV(k)], (k) => !C.rr[k]
+  ), curbMat);
+  leftCurb.receiveShadow = rightCurb.receiveShadow = true;
+  group.add(leftCurb, rightCurb);
+
+  // Side walls and the underside.
+  const sideU = (k) => C.s[k] / 3;
+  const rightWall = new THREE.Mesh(ribbon(
+    (k) => w(k), (k) => w(k), () => 0, () => -THICKNESS,
+    (k) => [sideU(k), 1], (k) => [sideU(k), 0], all
+  ), sideMat);
+  const leftWall = new THREE.Mesh(ribbon(
+    (k) => -w(k), (k) => -w(k), () => -THICKNESS, () => 0,
+    (k) => [sideU(k), 0], (k) => [sideU(k), 1], all
+  ), sideMat);
+  const bottom = new THREE.Mesh(ribbon(
+    (k) => w(k), (k) => -w(k), () => -THICKNESS, () => -THICKNESS,
+    () => [0, 0], () => [1, 0], all
+  ), bottomMat);
+  for (const m of [rightWall, leftWall, bottom]) { m.castShadow = true; m.receiveShadow = true; group.add(m); }
+  group.add(endCap(0, -1, sideMat), endCap(C.N - 1, 1, sideMat));
+
+  group.add(createRails());
+  group.add(createLegs(floorY));
+  group.add(createStartLine());
+
   return group;
 }
 
-function createChevronGeometry() {
-  const shape = new THREE.Shape();
-  shape.moveTo(0, 0.35);
-  shape.lineTo(-0.25, -0.2);
-  shape.lineTo(0.25, -0.2);
-  shape.lineTo(0, 0.35);
-  const geo = new THREE.ShapeGeometry(shape);
-  geo.rotateX(Math.PI / 2);
+// A strip running the length of the course. latA/latB give the two edges (sideways offsets),
+// yA/yB their heights above the centre line, uvA/uvB their texture coordinates, and
+// include(k) whether the quad from sample k to k+1 is drawn. Faces point along (B - A) x travel.
+function ribbon(latA, latB, yA, yB, uvA, uvB, include) {
+  const { N, xs, ys, zs, tx, tz } = C;
+  const pos = new Float32Array(N * 6);
+  const uv = new Float32Array(N * 4);
+  for (let k = 0; k < N; k++) {
+    const rx = -tz[k], rz = tx[k];
+    const la = latA(k), lb = latB(k);
+    pos.set([xs[k] + rx * la, ys[k] + yA(k), zs[k] + rz * la, xs[k] + rx * lb, ys[k] + yB(k), zs[k] + rz * lb], k * 6);
+    uv.set([...uvA(k), ...uvB(k)], k * 4);
+  }
+  const index = [];
+  for (let k = 0; k < N - 1; k++) {
+    if (!include(k)) continue;
+    const a0 = k * 2, b0 = k * 2 + 1, a1 = k * 2 + 2, b1 = k * 2 + 3;
+    index.push(a0, b0, a1, b0, b1, a1);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  geo.setIndex(index);
+  geo.computeVertexNormals();
   return geo;
 }
 
-function createStripeTexture() {
-  const width = 64;
-  const height = 256;
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
-
-  const bandHeight = height / STRIPE_COLORS.length;
-  for (let i = 0; i < STRIPE_COLORS.length; i++) {
-    ctx.fillStyle = STRIPE_COLORS[i];
-    ctx.fillRect(0, i * bandHeight, width, bandHeight);
-  }
-
-  const texture = new THREE.CanvasTexture(canvas);
-  return texture;
+// The flat end of the slab at the start (dir -1) or the box end (dir 1).
+function endCap(k, dir, material) {
+  const w = C.ws[k];
+  const geo = new THREE.PlaneGeometry(w * 2, THICKNESS);
+  const mesh = new THREE.Mesh(geo, material);
+  mesh.position.set(C.xs[k], C.ys[k] - THICKNESS / 2, C.zs[k]);
+  mesh.lookAt(C.xs[k] + C.tx[k] * dir, C.ys[k] - THICKNESS / 2, C.zs[k] + C.tz[k] * dir);
+  return mesh;
 }
 
-// True if (x, z) is over the path: within the half-width of the nearest point on
-// the centre polyline, with the half-width interpolated along each segment.
-export function isOnPath(x, z) {
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i];
-    const b = points[i + 1];
-    const dx = b.x - a.x;
-    const dz = b.z - a.z;
-    const lenSq = dx * dx + dz * dz;
+// Bumper rails: a rounded tube on little yellow posts, wherever the course says so.
+function createRails() {
+  const group = new THREE.Group();
+  const railMat = new THREE.MeshStandardMaterial({ color: RAIL_COLOR, roughness: 0.3, metalness: 0.15 });
+  const postMat = new THREE.MeshStandardMaterial({ color: POST_COLOR, roughness: 0.45 });
+  const postGeo = new THREE.CylinderGeometry(0.07, 0.09, RAIL_HEIGHT, 8);
+  postGeo.translate(0, RAIL_HEIGHT / 2, 0);
+  const capGeo = new THREE.SphereGeometry(RAIL_RADIUS * 1.5, 12, 8);
+  const posts = [];
+  const caps = [];
 
-    // How far along the segment that nearest point is, clamped to the segment (0 to 1).
-    let t = 0;
-    if (lenSq > 0) t = ((x - a.x) * dx + (z - a.z) * dz) / lenSq;
-    t = t < 0 ? 0 : t > 1 ? 1 : t;
-
-    const nearestX = a.x + dx * t;
-    const nearestZ = a.z + dz * t;
-    const halfWidth = a.halfWidth + (b.halfWidth - a.halfWidth) * t;
-
-    if (Math.hypot(x - nearestX, z - nearestZ) < halfWidth) return true;
-  }
-  return false;
-}
-
-// Height of the path centre line at the nearest horizontal point to (x, z).
-export function getPathHeight(x, z) {
-  let bestIndex = 0;
-  let bestDistSq = Infinity;
-  let bestT = 0;
-
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i];
-    const b = points[i + 1];
-    const dx = b.x - a.x;
-    const dz = b.z - a.z;
-    const lenSq = dx * dx + dz * dz;
-
-    let t = 0;
-    if (lenSq > 0) t = ((x - a.x) * dx + (z - a.z) * dz) / lenSq;
-    t = t < 0 ? 0 : t > 1 ? 1 : t;
-
-    const nearestX = a.x + dx * t;
-    const nearestZ = a.z + dz * t;
-    const distSq = (x - nearestX) ** 2 + (z - nearestZ) ** 2;
-
-    if (distSq < bestDistSq) {
-      bestDistSq = distSq;
-      bestIndex = i;
-      bestT = t;
+  for (const side of [-1, 1]) {
+    const flags = side < 0 ? C.rl : C.rr;
+    let k = 0;
+    while (k < C.N - 1) {
+      if (!flags[k]) { k++; continue; }
+      const startK = k;
+      while (k < C.N - 1 && flags[k]) k++;
+      const endK = k; // the run covers samples startK..endK
+      if (endK - startK < 2) continue;
+      const pts = [];
+      for (let j = startK; j <= endK; j++) {
+        const p = edgePoint(j, side, RAIL_HEIGHT);
+        pts.push(new THREE.Vector3(p.x, p.y, p.z));
+      }
+      const curve = new THREE.CatmullRomCurve3(pts);
+      const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, pts.length * 2, RAIL_RADIUS, 8, false), railMat);
+      tube.castShadow = true;
+      group.add(tube);
+      caps.push(pts[0], pts[pts.length - 1]);
+      for (let d = C.s[startK] + 0.2; d < C.s[endK]; d += POST_SPACING) {
+        const f = frameAt(d);
+        posts.push(new THREE.Vector3(f.x + f.rx * f.w * side, f.y, f.z + f.rz * f.w * side));
+      }
     }
   }
 
-  const a = points[bestIndex];
-  const b = points[bestIndex + 1];
-  return a.y + (b.y - a.y) * bestT;
+  const m = new THREE.Matrix4();
+  if (posts.length) {
+    const inst = new THREE.InstancedMesh(postGeo, postMat, posts.length);
+    posts.forEach((p, i) => inst.setMatrixAt(i, m.makeTranslation(p.x, p.y, p.z)));
+    inst.castShadow = true;
+    group.add(inst);
+  }
+  if (caps.length) {
+    const inst = new THREE.InstancedMesh(capGeo, postMat, caps.length);
+    caps.forEach((p, i) => inst.setMatrixAt(i, m.makeTranslation(p.x, p.y, p.z)));
+    group.add(inst);
+  }
+  return group;
 }
 
-// Unit tangent of the nearest segment in the X/Z plane, plus slope (rise / horizontal run).
-export function getPathTangentAndSlope(x, z) {
-  let bestIndex = 0;
-  let bestDistSq = Infinity;
+function edgePoint(k, side, y) {
+  const rx = -C.tz[k], rz = C.tx[k];
+  const w = C.ws[k];
+  return { x: C.xs[k] + rx * w * side, y: C.ys[k] + y, z: C.zs[k] + rz * w * side };
+}
 
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i];
-    const b = points[i + 1];
-    const dx = b.x - a.x;
-    const dz = b.z - a.z;
-    const lenSq = dx * dx + dz * dz;
-
-    let t = 0;
-    if (lenSq > 0) t = ((x - a.x) * dx + (z - a.z) * dz) / lenSq;
-    t = t < 0 ? 0 : t > 1 ? 1 : t;
-
-    const nearestX = a.x + dx * t;
-    const nearestZ = a.z + dz * t;
-    const distSq = (x - nearestX) ** 2 + (z - nearestZ) ** 2;
-
-    if (distSq < bestDistSq) {
-      bestDistSq = distSq;
-      bestIndex = i;
+// Support legs down to the stage floor, in pairs, like a toy race track's stands.
+function createLegs(floorY) {
+  const spots = [];
+  for (let d = 1.5; d < C.length - 0.5; d += LEG_SPACING) {
+    const f = frameAt(d);
+    for (const side of [-1, 1]) {
+      const lat = f.w * 0.55 * side;
+      spots.push({ x: f.x + f.rx * lat, z: f.z + f.rz * lat, top: f.y - THICKNESS + 0.05 });
     }
   }
+  const geo = new THREE.CylinderGeometry(LEG_RADIUS, LEG_RADIUS * 1.3, 1, 10);
+  geo.translate(0, 0.5, 0);
+  const inst = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color: LEG_COLOR, roughness: 0.5 }), spots.length);
+  const m = new THREE.Matrix4();
+  spots.forEach((p, i) => {
+    m.makeScale(1, Math.max(0.1, p.top - floorY), 1);
+    m.setPosition(p.x, floorY, p.z);
+    inst.setMatrixAt(i, m);
+  });
+  inst.receiveShadow = true;
+  return inst;
+}
 
-  const a = points[bestIndex];
-  const b = points[bestIndex + 1];
-  const dx = b.x - a.x;
-  const dz = b.z - a.z;
-  const horizontalLength = Math.hypot(dx, dz);
-  if (horizontalLength === 0) return { tx: 0, tz: -1, slope: 0 };
+// A chequered start line across the deck.
+function createStartLine() {
+  const f = frameAt(1.4);
+  const tex = cachedTexture('start', startTexture);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.repeat.set(Math.round(f.w * 2 / 0.5), 1);
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(f.w * 2, 0.5),
+    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })
+  );
+  mesh.rotation.order = 'YXZ';
+  mesh.rotation.set(-Math.PI / 2, Math.atan2(f.tx, f.tz), 0);
+  mesh.position.set(f.x, f.y + 0.006, f.z);
+  mesh.receiveShadow = true;
+  return mesh;
+}
 
-  const tx = dx / horizontalLength;
-  const tz = dz / horizontalLength;
-  const slope = (b.y - a.y) / horizontalLength;
-  return { tx, tz, slope };
+// ---- TEXTURES: all drawn on canvases at load time ----
+function canvas(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  return [c, c.getContext('2d')];
+}
+
+function finish(c, repeat = true) {
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+// Two soft tones in a checker, with grout and a faint bevel so each tile reads as a tile.
+function deckTexture() {
+  const [c, ctx] = canvas(256, 256);
+  const h = 128;
+  for (let i = 0; i < 2; i++) {
+    for (let j = 0; j < 2; j++) {
+      ctx.fillStyle = (i + j) % 2 ? DECK_B : DECK_A;
+      ctx.fillRect(i * h, j * h, h, h);
+      ctx.fillStyle = 'rgba(255,255,255,0.45)';
+      ctx.fillRect(i * h + 6, j * h + 6, h - 12, 5);
+      ctx.fillStyle = 'rgba(80,40,120,0.07)';
+      ctx.fillRect(i * h + 6, j * h + h - 11, h - 12, 5);
+    }
+  }
+  ctx.fillStyle = GROUT;
+  for (const at of [0, h]) {
+    ctx.fillRect(at - 2, 0, 4, 256);
+    ctx.fillRect(0, at - 2, 256, 4);
+  }
+  return finish(c);
+}
+
+function curbTexture() {
+  const [c, ctx] = canvas(32, 128);
+  ctx.fillStyle = CURB_WHITE;
+  ctx.fillRect(0, 0, 32, 128);
+  ctx.fillStyle = CURB_RED;
+  ctx.fillRect(0, 0, 32, 64);
+  return finish(c);
+}
+
+function sideTexture() {
+  const [c, ctx] = canvas(64, 64);
+  const g = ctx.createLinearGradient(0, 0, 0, 64);
+  g.addColorStop(0, '#8a49c4');
+  g.addColorStop(1, '#3d1766');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 64, 64);
+  ctx.fillStyle = SIDE_TRIM;
+  ctx.fillRect(0, 0, 64, 9);
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  for (let x = 4; x < 64; x += 16) {
+    ctx.beginPath();
+    ctx.arc(x + 4, 38, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  return finish(c);
+}
+
+function startTexture() {
+  const [c, ctx] = canvas(32, 32);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 32, 32);
+  ctx.fillStyle = '#1e1030';
+  ctx.fillRect(0, 0, 16, 16);
+  ctx.fillRect(16, 16, 16, 16);
+  return finish(c);
 }

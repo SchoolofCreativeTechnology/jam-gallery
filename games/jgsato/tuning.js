@@ -1,87 +1,85 @@
 // Every number you might want to tune lives here. Change one, refresh the page, see what happens.
+// Course layouts (paths, cars per course, jack-in-the-boxes, stars, medal times) live in levels.js.
 
 // ---- Camera ----
 export const camera = {
-  offset: { x: 0, y: 18, z: 14 }, // where it sits relative to the head (this angle is roughly isometric)
-  fov: 50,
-  follow: 1, // 1 = locked to the head, 0 = fixed in place
-  shakeOnShove: 0.35, // camera shake intensity when a car hits
-  shakeOnFall: 0.6,   // camera shake intensity when the head goes off the edge
-  shakeDecay: 4.0,    // how fast shake fades (per second)
-};
-
-// ---- The path ----
-// A guided route from the start to his box. Each point carries a half-width:
-// the path reaches that far out from the centre line. Wide in places, tight in
-// others, on purpose — that's the rhythm you chose.
-export const path = {
-  // Each point is a horizontal centre-line position plus an elevation (y).
-  // Positive y is up; small hills and valleys make the head speed up and slow down.
-  points: [
-    { x: 0, z: 8, y: 0, halfWidth: 4.0 }, // start, wide, room to get going
-    { x: 3, z: 3, y: 0, halfWidth: 3.0 }, // gentle right, flat
-    { x: 5, z: -2, y: 1.0, halfWidth: 2.5 }, // keep curving right, rise
-    { x: 2, z: -7, y: 1.0, halfWidth: 2.0 }, // cut back left, flat
-    { x: -3, z: -11, y: -0.3, halfWidth: 1.6 }, // left again, descent
-    { x: -1, z: -17, y: -0.3, halfWidth: 1.4 }, // slight right, flat valley
-    { x: 3, z: -22, y: 0.7, halfWidth: 1.5 }, // right, climb
-    { x: 4, z: -28, y: 0.7, halfWidth: 2.0 }, // keep right, flat
-    { x: 0, z: -33, y: 0.1, halfWidth: 2.5 }, // left into the box, gentle descent
-    { x: -2, z: -40, y: 0, halfWidth: 4.0 }, // his box sits here
-  ],
-  thickness: 0.6, // how thick the slab is
+  offset: { x: 0, y: 11.5, z: 8.6 }, // where it sits relative to the head (roughly isometric)
+  fov: 46,
+  follow: 6,          // how quickly it catches up with the head (higher = tighter)
+  lookahead: 0.3,     // seconds of the head's velocity the camera leads by
+  maxLookahead: 3.0,  // never lead by more than this many units
+  speedZoom: 0.12,    // extra pull-back per unit of speed, so fast runs see further
+  shakeOnShove: 0.3,  // camera shake when a toy hits
+  shakeOnFall: 0.45,  // camera shake when the head goes off the edge
+  shakeOnBonk: 0.08,  // camera shake when the head bounces off a rail
+  shakeDecay: 3.5,    // how fast shake fades (per second)
 };
 
 // ---- The head ----
 export const head = {
-  radius: 0.6,
-  accel: 18, // how hard the keys push
-  drag: 2.2, // how quickly it slows down. LOWER = slippier, more Marble Madness
-  maxSpeed: 11,
+  radius: 0.65,
+  accel: 19,      // how hard the keys push
+  drag: 1.9,      // how quickly it slows down. LOWER = slippier, more Marble Madness
+  maxSpeed: 11.5,
+  edgeGrace: 0.2, // how far past the edge the centre can hang before it tips over
+  railBounce: 0.45, // how much speed a rail hands back (0 = dead stop, 1 = perfect bounce)
 
-  // The face, held upright as if it were suspended in oil inside the head.
-  faceTilt: Math.PI / 3.2, // tilt the face up toward the camera (~56°)
-  faceWidth: 0.75, // face width as a fraction of the head radius
-  faceHeight: 0.65, // face height as a fraction of the head radius
-  faceWobble: 0.35, // how far it leans back when you accelerate
-  faceDamping: 2.5, // how slowly that lean settles
+  // The face, held upright as if suspended in oil inside the glass.
+  faceUp: 0.62,      // how far the face tips up toward the camera (radians)
+  turn: 0.07,        // how far he looks the way he's sliding, per unit of sideways speed
+  maxTurn: 0.6,
+  wobble: 0.05,      // how far he leans per unit of speed change
+  maxLean: 0.45,
+  wobbleSpring: 3.2, // how quickly the lean settles; lower = gloopier oil
 
-  // Feel: speed trail and scared face.
-  trailInterval: 0.05, // seconds between trail droplets
-  trailLife: 0.3,      // seconds a droplet lasts
-  trailSize: 0.22,     // droplet size
-  trailColor: '#ffffff',
-  trailOpacity: 0.35,
+  // Feel: speed trail and expressions.
+  trailInterval: 0.045,
+  trailLife: 0.32,
+  trailSize: 0.2,
+  trailOpacity: 0.3,
   scaredDuration: 0.9, // seconds the scared face stays on after danger
 };
 
-// ---- Cars (the toys) ----
+// ---- Toy cars (per-course speed, gap and warning live in levels.js) ----
 export const cars = {
-  speed: 6, // how fast they drive across the path
-  spawnGap: 1.8, // seconds between spawns
-  difficultyRamp: 0.02, // per-second multiplier growth (1 + runTime * this)
-  maxDifficulty: 2.0,   // cap so it doesn't become impossible
-  minSpawnGap: 0.7,     // fastest spawn interval
-  shoveForce: 5, // how hard they push the head
-  radius: 0.4, // car collision radius
-  length: 1.2, // visual length
-  width: 0.6, // visual width
-  colour: '#e74c3c', // flat red for gray box
-  lookaheadMin: 3.5, // closest a car can spawn ahead of the ball
-  lookaheadMax: 4.5, // farthest a car can spawn ahead of the ball
-  warningTime: 0.25, // short blink before the car enters
-  warningColor: '#f1c40f', // bright yellow marker
+  aheadMin: 2.8,   // closest a car lane can open ahead of the head
+  aimJitter: [-1.0, 2.2], // how far before/after your arrival point the lane opens (units)
+  shove: 0.95,     // how much of the car's speed it hands to the head
+  hitRadius: 0.32, // half the car's width, for the hit capsule
+  hitLength: 0.36, // half the car's length, minus the rounded ends
+  length: 1.2,
+  width: 0.62,
+};
+
+// ---- Jack-in-the-boxes ----
+export const jacks = {
+  period: 2.9,     // seconds per full cycle
+  telegraph: 0.7,  // seconds of rattling before it springs
+  extend: 0.12,    // seconds to spring out
+  hold: 0.45,      // seconds it stays out
+  retract: 0.55,   // seconds to wind back in
+  reach: 0.62,     // how far across the deck it punches, as a fraction of the full width
+  power: 8.5,      // how hard it shoves
+  gloveRadius: 0.42,
+};
+
+// ---- Stars ----
+export const stars = {
+  bonus: 0.5,  // seconds off your time per star
+  radius: 0.5, // pickup reach, added to the head's radius
 };
 
 // ---- Goal ----
 export const goal = {
-  radius: 1.2, // trigger radius around the box
+  radius: 1.4, // how close to his box counts as home
 };
 
 // ---- Rules ----
 export const rules = {
-  restartDelay: 0.4, // seconds before R will restart, so a death registers first
-  fallTo: -25, // the head is gone once it drops below this
-  gravity: 40, // how hard the void pulls once the head is off the path
-  slopeGravity: 40, // how hard gravity pulls along a slope
+  restartDelay: 0.35,   // seconds before a restart key works, so a death registers first
+  deathPanelDelay: 0.95, // seconds of watching him fall (and land) before the panel shows
+  winPanelDelay: 1.15,  // seconds of celebration before the panel shows
+  gravity: 34,          // how hard the void pulls once the head is off the deck
+  slopeGravity: 30,     // how hard gravity pulls along a slope
+  hitStop: 0.06,        // seconds the world freezes on a hit, so it lands
 };
