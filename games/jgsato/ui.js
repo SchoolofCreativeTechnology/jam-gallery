@@ -68,7 +68,8 @@ function renderCards(selected) {
       <div class="name">${lv.name}</div>
       <div class="best">${best !== null ? best.toFixed(2) + 's' : i < unlocked ? 'not yet' : ''}</div>`;
     if (i < unlocked) {
-      card.addEventListener('pointerenter', () => handlers.hover && handlers.hover(i));
+      // Mouse only: on iPhone, changing the page on hover swallows the tap that follows.
+      card.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse' && handlers.hover) handlers.hover(i); });
       card.addEventListener('click', () => handlers.play && handlers.play(i));
     }
     els.levels.appendChild(card);
