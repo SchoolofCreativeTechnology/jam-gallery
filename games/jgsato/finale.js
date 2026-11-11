@@ -34,7 +34,7 @@ export function startFinale() {
   winkClock = 0;
   rain.innerHTML = '';
   drops = [];
-  el.classList.remove('hidden', 'writing', 'written', 'jambi-in', 'ready');
+  el.classList.remove('hidden', 'writing', 'written', 'jambi-in', 'ready', 'hinted');
   void el.offsetWidth; // restart the CSS animations
   el.classList.add('show');
   drawJambi(false);
@@ -64,6 +64,7 @@ export function updateFinale(dt) {
   if (at(3.0)) el.classList.add('written');
   if (at(3.1)) { el.classList.add('jambi-in'); cue = 'jambi'; }
   if (at(4.4)) el.classList.add('ready');
+  if (at(5.6)) el.classList.add('hinted');
 
   // Wink every couple of seconds once he's up.
   if (t > 3.6) {

@@ -7,7 +7,16 @@ const els = {
   loading: $('loading'), title: $('title'), levels: $('levels'), hud: $('hud'), banner: $('banner'),
   gameover: $('gameover'), win: $('win'), pause: $('pause'), toast: $('toast'), flash: $('flash'),
   timer: $('timer'), hudLevel: $('hud-level'), hudProgress: $('hud-progress'), hudStars: $('hud-stars'),
+  bossHud: $('boss-hud'),
 };
+const BOSS_QUIPS = [
+  'He tipped. You slipped.',
+  'Djinormous laughs a big laugh.',
+  'Hit him harder. Run up first.',
+  'When he winds up, lean in.',
+  'After he lunges, he\'s winded. Go!',
+  'Off the platter. Again!',
+];
 const MEDAL_NAMES = ['gold', 'silver', 'bronze'];
 const QUIPS = [
   'Into the void he goes.',
@@ -35,11 +44,40 @@ export function initUI(levelList, h) {
     });
   }
   $('pause-btn').addEventListener('click', () => handlers.pause && handlers.pause());
+  els.bossHud.querySelector('.boss-pause').addEventListener('click', () => handlers.pause && handlers.pause());
   $('tilt-btn').addEventListener('click', (e) => { e.stopPropagation(); handlers.tilt && handlers.tilt(); });
 }
 
 function hideAll() {
-  for (const k of ['loading', 'title', 'hud', 'banner', 'gameover', 'win', 'pause']) els[k].classList.add('hidden');
+  for (const k of ['loading', 'title', 'hud', 'banner', 'gameover', 'win', 'pause', 'bossHud']) els[k].classList.add('hidden');
+}
+
+// ---- BOSS ----
+export function showBossHUD(max) {
+  hideAll();
+  els.bossHud.classList.remove('hidden');
+  els.bossHud.querySelector('.boss-pips').innerHTML = '<i></i>'.repeat(max);
+  setBossHP(max, max);
+}
+
+export function setBossHP(hp, max) {
+  els.bossHud.querySelector('.boss-fill').style.width = `${(Math.max(0, hp) / max) * 100}%`;
+  if (hp < max) {
+    els.bossHud.classList.remove('hit');
+    void els.bossHud.offsetWidth;
+    els.bossHud.classList.add('hit');
+  }
+}
+
+export function hideBossHUD() {
+  els.bossHud.classList.add('hidden');
+}
+
+export function showBannerText(num, name, tag) {
+  els.banner.querySelector('.banner-num').textContent = num;
+  els.banner.querySelector('.banner-name').textContent = name;
+  els.banner.querySelector('.banner-tag').textContent = tag;
+  els.banner.classList.remove('hidden', 'out');
 }
 
 // ---- TITLE ----
@@ -74,6 +112,17 @@ function renderCards(selected) {
     }
     els.levels.appendChild(card);
   });
+  // Once he's been beaten, he can be fought again from here.
+  if (handlers.bossUnlocked && handlers.bossUnlocked()) {
+    const i = levels.length;
+    const card = document.createElement('div');
+    card.className = 'card boss-card' + (i === selected ? ' selected' : '');
+    card.setAttribute('role', 'listitem');
+    card.innerHTML = `<div class="medal gold"></div><div class="num">★</div><div class="name">Djinormous</div><div class="best">secret</div>`;
+    card.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse' && handlers.hover) handlers.hover(i); });
+    card.addEventListener('click', () => handlers.boss && handlers.boss());
+    els.levels.appendChild(card);
+  }
 }
 
 export function setTiltLabel(on) {
@@ -120,13 +169,14 @@ export function hideBanner() {
 }
 
 // ---- END OF A RUN ----
-export function showGameOver() {
+export function showGameOver(boss = false) {
   els.banner.classList.add('hidden');
   els.gameover.classList.remove('hidden');
+  const list = boss ? BOSS_QUIPS : QUIPS;
   let q;
-  do q = Math.floor(Math.random() * QUIPS.length); while (q === lastQuip && QUIPS.length > 1);
+  do q = Math.floor(Math.random() * list.length); while (q === lastQuip && list.length > 1);
   lastQuip = q;
-  els.gameover.querySelector('.quip').textContent = QUIPS[q];
+  els.gameover.querySelector('.quip').textContent = list[q];
 }
 
 export function showWin({ levelIndex, raw, stars, bonus, final, medal, isBest, previousBest, isLast }) {

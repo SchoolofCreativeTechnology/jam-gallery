@@ -84,6 +84,28 @@ export const touch = {
   tiltSmoothing: 0.35, // 0..1, how much each tilt reading moves the input (lower = smoother)
 };
 
+// ---- The secret boss: Djinormous, on his tilting platter ----
+// Each pair is [at full health, at his last hit point]: he gets meaner as he wears down.
+export const boss = {
+  platterRadius: 9.5, // how far from the centre you can roll before you go over
+  headRadius: 2.2,    // his size, for bumping into him
+  health: 5,          // hits it takes to beat him
+  hitSpeed: 5.2,      // how fast you must be rolling straight into him for a hit to count
+  knockback: 8.5,     // how hard a hit throws you back out
+  shrug: 6.5,         // how hard he shoves you off when you only nudge him (gives you a run-up)
+  invulnerable: 1.0,  // seconds after a hit before he can be hit again
+  sway: [0.06, 0.11],      // how far the platter rocks while he's idle (slope)
+  swaySpeed: [0.55, 1.1],  // how quickly the rocking goes round
+  lunge: [0.21, 0.3],      // how far it tips toward your side when he lunges (slope)
+  lungeEvery: [4.2, 2.4],  // seconds between attacks
+  windup: [1.0, 0.7],      // seconds of warning before an attack
+  lungeHold: 1.3,     // seconds the platter stays tipped
+  recoil: 0.2,        // after a lunge he's winded and it tips back toward him: your chance
+  recoilTime: 1.5,
+  slamPush: 5,        // how hard his slam's shockwave shoves you outward (last three hits only)
+  tiltSpring: 4,      // how quickly the platter follows where he wants it (higher = snappier)
+};
+
 // ---- Goal ----
 export const goal = {
   radius: 1.4, // how close to his box counts as home
