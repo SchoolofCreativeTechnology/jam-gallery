@@ -250,6 +250,119 @@ export function playMedal(rank) {
   tone('sine', top * 1.5, t + 0.08, 0.08, 0.005, 0.6);
 }
 
+// ---- THE SECRET BOSS ----
+
+// Through the portal: a rising, warbling whoosh.
+export function playWarp() {
+  if (!ready()) return;
+  const t = ctx.currentTime;
+  const o = ctx.createOscillator();
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(110, t);
+  o.frequency.exponentialRampToValueAtTime(1800, t + 1.1);
+  const lfo = ctx.createOscillator();
+  lfo.frequency.value = 11;
+  const lg = ctx.createGain();
+  lg.gain.value = 60;
+  lfo.connect(lg);
+  lg.connect(o.frequency);
+  const f = ctx.createBiquadFilter();
+  f.type = 'lowpass';
+  f.frequency.value = 2400;
+  const g = ctx.createGain();
+  env(g, t, 0.16, 0.3, 1.0);
+  o.connect(f); f.connect(g); g.connect(sfx);
+  o.start(t); lfo.start(t);
+  o.stop(t + 1.4); lfo.stop(t + 1.4);
+  noiseHit(t + 0.2, 0.3, 1.1, 'bandpass', 900);
+}
+
+// Djinormous laughs: a low, wobbling "ho ho ho".
+export function playRoar() {
+  if (!ready()) return;
+  const t = ctx.currentTime;
+  for (let i = 0; i < 3; i++) {
+    const s = t + i * 0.26;
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(95 - i * 6, s);
+    o.frequency.exponentialRampToValueAtTime(62 - i * 4, s + 0.22);
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = 420;
+    f.Q.value = 3;
+    const g = ctx.createGain();
+    env(g, s, 0.5, 0.02, 0.22);
+    o.connect(f); f.connect(g); g.connect(sfx);
+    o.start(s);
+    o.stop(s + 0.28);
+  }
+}
+
+// He's winding up: a nasty rising rattle.
+export function playWindup() {
+  if (!ready()) return;
+  const t = ctx.currentTime;
+  const o = ctx.createOscillator();
+  o.type = 'square';
+  o.frequency.setValueAtTime(70, t);
+  o.frequency.exponentialRampToValueAtTime(240, t + 0.8);
+  const lfo = ctx.createOscillator();
+  lfo.frequency.value = 18;
+  const lg = ctx.createGain();
+  lg.gain.value = 0.5;
+  const g = ctx.createGain();
+  g.gain.value = 0;
+  lfo.connect(lg);
+  lg.connect(g.gain);
+  const f = ctx.createBiquadFilter();
+  f.type = 'lowpass';
+  f.frequency.value = 900;
+  const out = ctx.createGain();
+  env(out, t, 0.25, 0.05, 0.8);
+  o.connect(g); g.connect(f); f.connect(out); out.connect(sfx);
+  o.start(t); lfo.start(t);
+  o.stop(t + 0.9); lfo.stop(t + 0.9);
+}
+
+// A solid hit on him: a crunchy smack and a falling pitch.
+export function playBossHit(hpLeft) {
+  if (!ready()) return;
+  const t = ctx.currentTime;
+  noiseHit(t, 0.7, 0.18, 'lowpass', 2400);
+  const o = tone('square', 420 + hpLeft * 40, t, 0.22, 0.003, 0.3);
+  o.frequency.exponentialRampToValueAtTime(90, t + 0.3);
+  const b = tone('sine', 120, t, 0.5, 0.003, 0.35);
+  b.frequency.exponentialRampToValueAtTime(40, t + 0.35);
+}
+
+// A big deep thud (his slam, and the final explosion when big = true).
+export function playBoom(big = false) {
+  if (!ready()) return;
+  const t = ctx.currentTime;
+  const o = tone('sine', big ? 90 : 110, t, big ? 0.9 : 0.55, 0.005, big ? 1.4 : 0.5);
+  o.frequency.exponentialRampToValueAtTime(28, t + (big ? 1.2 : 0.45));
+  noiseHit(t, big ? 0.9 : 0.5, big ? 1.4 : 0.4, 'lowpass', big ? 1400 : 700);
+}
+
+// One firework: a whistle up, then a crackling pop.
+export function playFirework() {
+  if (!ready()) return;
+  const t = ctx.currentTime;
+  const o = ctx.createOscillator();
+  o.type = 'sine';
+  const top = 1400 + Math.random() * 900;
+  o.frequency.setValueAtTime(500, t);
+  o.frequency.exponentialRampToValueAtTime(top, t + 0.35);
+  const g = ctx.createGain();
+  env(g, t, 0.05, 0.05, 0.3);
+  o.connect(g); g.connect(sfx);
+  o.start(t);
+  o.stop(t + 0.4);
+  noiseHit(t + 0.38, 0.35, 0.5, 'bandpass', 2500 + Math.random() * 2000);
+  for (let i = 0; i < 5; i++) noiseHit(t + 0.5 + Math.random() * 0.5, 0.08, 0.04, 'highpass', 5000);
+}
+
 export function playClick() {
   if (!ready()) return;
   tone('triangle', 900, ctx.currentTime, 0.08, 0.002, 0.05);

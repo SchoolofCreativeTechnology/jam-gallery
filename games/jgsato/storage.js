@@ -9,10 +9,10 @@ function read() {
     const raw = localStorage.getItem(KEY);
     const parsed = raw ? JSON.parse(raw) : null;
     if (parsed && typeof parsed === 'object') {
-      return { best: parsed.best || {}, unlocked: Math.max(1, parsed.unlocked | 0), muted: !!parsed.muted, tilt: parsed.tilt !== false };
+      return { best: parsed.best || {}, unlocked: Math.max(1, parsed.unlocked | 0), muted: !!parsed.muted, tilt: parsed.tilt !== false, boss: !!parsed.boss };
     }
   } catch { /* storage unavailable */ }
-  return { best: {}, unlocked: 1, muted: false, tilt: true };
+  return { best: {}, unlocked: 1, muted: false, tilt: true, boss: false };
 }
 
 function write() {
@@ -45,6 +45,15 @@ export function tiltOn() {
 
 export function setTilt(on) {
   data.tilt = on;
+  write();
+}
+
+export function bossBeaten() {
+  return data.boss;
+}
+
+export function setBossBeaten() {
+  data.boss = true;
   write();
 }
 

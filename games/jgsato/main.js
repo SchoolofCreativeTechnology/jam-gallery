@@ -17,6 +17,8 @@ import * as audio from './audio.js';
 import * as ui from './ui.js';
 import * as store from './storage.js';
 import { initFinale, startFinale, updateFinale, finaleRunning, finish as finishFinale } from './finale.js';
+import { createBoss, createPortal, placePortal, updatePortal, startFight, updateFight, ballState, bossCentre, bossRoot3D, taunt } from './boss.js';
+import { initCredits, startCredits, updateCredits, creditsRunning, setShot, skip as skipCredits } from './credits.js';
 import { initTouch, readTouch, requestTilt, recentreTilt, setTiltWanted, tiltActive, isTouch } from './mobile.js';
 import { initFPS, updateFPS } from './fps.js';
 import { debugLoad, debugUpdate } from './debug.js';
@@ -46,7 +48,8 @@ scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environmentIntensity = 0.38;
 pmrem.dispose();
 
-scene.add(new THREE.HemisphereLight('#fff2e0', '#3a2050', 1.15));
+const hemi = new THREE.HemisphereLight('#fff2e0', '#3a2050', 1.15);
+scene.add(hemi);
 // The key light follows the head, so its shadow is always crisp right where you're looking.
 const sun = new THREE.DirectionalLight('#fff3dc', 2.3);
 sun.castShadow = true;
@@ -72,6 +75,11 @@ let pathMesh = null;
 buildCourse(levels[0]);
 const head = createHead(scene);
 initFX(scene);
+// Everything in the scene so far (lights, the head, effects) stays on in the boss arena;
+// everything added after this (the course, the stage, the toys) is hidden there.
+const keepInArena = new Set(scene.children);
+keepInArena.add(createBoss(scene));
+createPortal(scene);
 initToys(scene, {
   onHit(pos, color) {
     burst(pos, { count: 18, colors: ['#ffd23d', '#ffffff', color], speed: 5, up: 3, life: 0.6, size: 1 });
@@ -134,9 +142,18 @@ function loadLevel(i) {
   audio.setTempo(120 + i * 5);
 }
 
+// Every course beaten: the far end of course 1 opens onto the portal to the secret boss.
+function secretOpen() {
+  return store.bestTime(levels.length - 1) !== null;
+}
+
 function resetRun() {
   const f = frameAt(0.9);
   head.reset(f.x, f.z);
+  head.openEnd = levelIndex === 0 && secretOpen();
+  const L = getCourse().length;
+  const e = frameAt(L);
+  placePortal(e.x + e.tx * 3.4, e.y - 0.8, e.z + e.tz * 3.4, head.openEnd);
   resetToys();
   resetStars();
   resetGoal();
@@ -166,7 +183,8 @@ function setState(s) {
 }
 
 function goTitle() {
-  loadLevel(selected);
+  leaveArena();
+  loadLevel(Math.min(selected, levels.length - 1));
   resetRun();
   setState('title');
   ui.showTitle(selected);
@@ -175,7 +193,9 @@ function goTitle() {
 }
 
 function play(i) {
+  if (i === levels.length && store.bossBeaten()) { bossFromMenu(); return; }
   if (i >= store.unlockedCount()) return;
+  leaveArena();
   audio.unlockAudio();
   if (isTouch && store.tiltOn()) requestTilt();
   selected = i;
@@ -190,7 +210,233 @@ function play(i) {
 }
 
 function retry() {
-  play(levelIndex);
+  if (mode === 'boss') enterBoss();
+  else play(levelIndex);
+}
+
+// ---- THE SECRET BOSS ----
+let mode = 'course'; // 'course', or 'boss' while you're in Djinormous's arena
+let hiddenInArena = [];
+let wantBossShot = false;
+let bossShot = null;
+let fireworkClock = 0;
+let shotQueue = [];
+const SHOT_AT = [0.42, 0.5, 0.55, 0.6, 0.86]; // how far along each course its credits snapshot is taken
+
+function enterArena() {
+  if (mode === 'boss') return;
+  mode = 'boss';
+  hiddenInArena = [];
+  for (const o of scene.children) {
+    if (!keepInArena.has(o) && o.visible) { o.visible = false; hiddenInArena.push(o); }
+  }
+  bossRoot3D().visible = true;
+  // Dark, with one spotlight on the platter.
+  scene.background.set('#030206');
+  scene.fog.color.set('#030206');
+  scene.fog.near = 34;
+  scene.fog.far = 90;
+  hemi.intensity = 0.14;
+  sun.intensity = 0.35;
+  rim.intensity = 0.2;
+  scene.environmentIntensity = 0.2;
+}
+
+function leaveArena() {
+  if (mode !== 'boss') return;
+  mode = 'course';
+  for (const o of hiddenInArena) o.visible = true;
+  hiddenInArena = [];
+  bossRoot3D().visible = false;
+  scene.background.set(BG);
+  scene.fog.color.set(BG);
+  scene.fog.near = 42;
+  scene.fog.far = 125;
+  hemi.intensity = 1.15;
+  sun.intensity = 2.3;
+  rim.intensity = 0.8;
+  scene.environmentIntensity = 0.38;
+}
+
+function warpFlash() {
+  const w = document.getElementById('warp');
+  w.classList.remove('hidden', 'go');
+  void w.offsetWidth;
+  w.classList.add('go');
+}
+
+// Rolled off the end of course 1: down the portal.
+function startWarp() {
+  setState('warp');
+  audio.setRoll(0);
+  audio.playWarp();
+  ui.hideHUD();
+  fallTarget.copy(camTarget);
+  warpFlash();
+  shake(0.3);
+}
+
+function bossFromMenu() {
+  audio.unlockAudio();
+  if (isTouch && store.tiltOn()) requestTilt();
+  audio.playWarp();
+  warpFlash();
+  enterBoss();
+}
+
+function enterBoss() {
+  enterArena();
+  startFight();
+  const b = ballState();
+  head.placeAt(b.x, b.y, b.z);
+  clearFX();
+  runTime = 0;
+  hitStop = 0;
+  shakeAmount = 0;
+  snapCamera = true;
+  wantBossShot = false;
+  recentreTilt();
+  setState('ready');
+  ui.showBossHUD(tuning.boss.health);
+  ui.showBannerText('Secret course', 'Djinormous', 'Ram him hard. Stay on the platter.');
+  audio.setTempo(156);
+  audio.setMusicLevel(1);
+}
+
+function bossLost() {
+  setState('dead');
+  shake(tuning.camera.shakeOnFall);
+  audio.playFall();
+  audio.setRoll(0);
+  head.express('dizzy', 0);
+  taunt();
+  setTimeout(() => { if (mode === 'boss' && state === 'dead') audio.playRoar(); }, 500);
+}
+
+function bossWon() {
+  setState('won');
+  store.setBossBeaten();
+  audio.setRoll(0);
+  head.express('happy', 0);
+  wantBossShot = true;
+  fireworkClock = 0;
+  audio.setMusicLevel(0.5);
+}
+
+function firework() {
+  const colors = [['#ff2a6d', '#ffd23d', '#ffffff'], ['#05d9e8', '#9d4edd', '#ffffff'], ['#7ee787', '#ffd23d', '#ff8500'], ['#ff7ab0', '#fff3a0', '#05d9e8']];
+  const p = new THREE.Vector3((Math.random() - 0.5) * 18, 6 + Math.random() * 7, -4 - Math.random() * 8);
+  burst(p, { count: 60, colors: colors[Math.floor(Math.random() * colors.length)], speed: 9, up: 2, gravity: 4, life: 1.6, size: 1.3 });
+  shockwave(p, { color: '#ffffff', size: 4 });
+  audio.playFirework();
+}
+
+// One frame of the fight: run the platter and him, then react to what happened.
+function bossFrame(dt, input) {
+  const ev = updateFight(dt, input, state === 'playing');
+  const b = ballState();
+  head.group.position.set(b.x, b.y, b.z);
+  head.drive(dt, b.vx, b.vz, b.falling ? 9 : 0);
+  const centre = bossCentre();
+
+  if (state === 'playing') {
+    runTime += dt;
+    audio.setRoll(b.falling ? 0 : Math.hypot(b.vx, b.vz));
+  }
+  if (ev.roar) { audio.playRoar(); shake(0.25); }
+  if (ev.telegraph) audio.playWindup();
+  if (ev.lunge) { shake(0.2); audio.playBoom(false); }
+  if (ev.slam) {
+    audio.playBoom(false);
+    shake(0.5);
+    shockwave(new THREE.Vector3(0, 0.2, 0), { color: '#ffb02e', size: 9 });
+    burst(new THREE.Vector3(0, 0.5, 0), { count: 40, colors: ['#ffb02e', '#ffffff', '#ff2a6d'], speed: 9, up: 3, life: 0.8 });
+  }
+  if (ev.shoved) { head.express('scared', 0.7); audio.playShove(); }
+  if (ev.bump) { audio.playBonk(ev.bump + 3); shake(0.1); head.express('scared', 0.4); }
+  if (ev.hit) {
+    const p = new THREE.Vector3(ev.hit.x, centre.y - 0.6, ev.hit.z);
+    burst(p, { count: 50, colors: ['#ffd23d', '#ffffff', '#ff2a6d', '#05d9e8'], speed: 9, up: 6, life: 0.9, size: 1.3 });
+    shockwave(p, { color: '#ffffff', size: 5 });
+    hitStop = 0.12;
+    shake(0.55);
+    audio.playBossHit(ev.hit.hp);
+    ui.setBossHP(ev.hit.hp, tuning.boss.health);
+    ui.flash();
+    head.express('happy', 0.9);
+  }
+  if (ev.defeated) bossWon();
+  if (ev.pop) {
+    const p = centre.clone().add(new THREE.Vector3((Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3));
+    burst(p, { count: 24, colors: ['#ff2a6d', '#ffd23d', '#ffffff'], speed: 6, up: 3, life: 0.6 });
+    audio.playBonk(7);
+    shake(0.12);
+  }
+  if (ev.boom) {
+    for (let i = 0; i < 4; i++) {
+      burst(centre, { count: 90, colors: ['#ff2a6d', '#ffd23d', '#05d9e8', '#9d4edd', '#7ee787', '#ffffff'], speed: 10 + i * 3, up: 8, gravity: 6, life: 2, size: 1.5 });
+    }
+    shockwave(centre, { color: '#ffffff', size: 12 });
+    shockwave(new THREE.Vector3(0, 0.2, 0), { color: '#ffd23d', size: 14 });
+    audio.playBoom(true);
+    audio.playWin();
+    shake(1);
+    ui.flash();
+  }
+  if (ev.fell && state === 'playing') bossLost();
+
+  if (state === 'dead' && !panelShown && stateTime > tuning.rules.deathPanelDelay) {
+    panelShown = true;
+    ui.showGameOver(true);
+  }
+  if (state === 'won') {
+    if (stateTime > 2.5 && stateTime < 10) {
+      fireworkClock -= dt;
+      if (fireworkClock <= 0) { fireworkClock = 0.18 + Math.random() * 0.2; firework(); }
+    }
+    if (!panelShown && stateTime > 2.9) {
+      panelShown = true;
+      ui.hideBossHUD();
+      startCredits();
+      if (bossShot) setShot(5, bossShot);
+    }
+  }
+}
+
+// A snapshot of one course for the credits, taken behind the black screen.
+function captureCourseShot(i) {
+  loadLevel(i);
+  resetRun();
+  placePortal(0, -999, 0, false);
+  const f = frameAt(getCourse().length * SHOT_AT[i]);
+  head.reset(f.x, f.z);
+  head.express('happy', 0);
+  updateStars(0, worldTime, head, camera, () => {});
+  snapCamera = true;
+  updateCamera(0);
+  renderer.render(scene, camera);
+  setShot(i, grabShot());
+}
+
+function grabShot() {
+  try {
+    const src = renderer.domElement;
+    const c = document.createElement('canvas');
+    c.width = 480;
+    c.height = 300;
+    const want = c.width / c.height;
+    let w = src.width, h = src.width / want;
+    if (h > src.height) { h = src.height; w = h * want; }
+    c.getContext('2d').drawImage(src, (src.width - w) / 2, (src.height - h) / 2, w, h, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.85);
+  } catch {
+    return null;
+  }
+}
+
+function creditsDone() {
+  selected = 0;
+  goTitle();
 }
 
 function next() {
@@ -283,8 +529,17 @@ ui.initUI(levels, {
   mute: toggleMute,
   tilt: toggleTilt,
   level: levelTilt,
-  hover: (i) => { if (state === 'title' && i !== selected) { selected = i; ui.selectCard(i); loadLevel(i); resetRun(); titlePan = 0; } },
+  hover: (i) => { if (state === 'title' && i !== selected) selectCourse(i); },
+  boss: bossFromMenu,
+  bossUnlocked: () => store.bossBeaten(),
 });
+
+// On the title screen: highlight a card and fly over that course (the boss card keeps the last one).
+function selectCourse(i) {
+  selected = i;
+  ui.selectCard(i);
+  if (i < levels.length) { loadLevel(i); resetRun(); titlePan = 0; }
+}
 
 // ---- INPUT: WASD and the arrow keys, both live, plus touch ----
 const held = new Set();
@@ -298,10 +553,14 @@ addEventListener('keydown', (e) => {
   const code = e.code;
   if (code === 'KeyM') { toggleMute(); return; }
 
+  if (creditsRunning()) {
+    if (code === 'Enter' || code === 'Space' || code === 'Escape') skipCredits();
+    return;
+  }
   if (state === 'title') {
-    const unlocked = store.unlockedCount();
-    if (code === 'ArrowLeft' || code === 'KeyA') { selected = Math.max(0, selected - 1); ui.selectCard(selected); loadLevel(selected); resetRun(); titlePan = 0; audio.playClick(); }
-    if (code === 'ArrowRight' || code === 'KeyD') { selected = Math.min(unlocked - 1, selected + 1); ui.selectCard(selected); loadLevel(selected); resetRun(); titlePan = 0; audio.playClick(); }
+    const last = store.bossBeaten() ? levels.length : store.unlockedCount() - 1;
+    if (code === 'ArrowLeft' || code === 'KeyA') { selectCourse(Math.max(0, selected - 1)); audio.playClick(); }
+    if (code === 'ArrowRight' || code === 'KeyD') { selectCourse(Math.min(last, selected + 1)); audio.playClick(); }
     if (code === 'Enter' || code === 'Space' || code === 'ArrowUp' || code === 'KeyW') play(selected);
   } else if (state === 'ready' || state === 'playing') {
     if (code === 'Escape' || code === 'KeyP') pause();
@@ -314,6 +573,7 @@ addEventListener('keydown', (e) => {
     if (code === 'Escape') { selected = levelIndex; goTitle(); }
     else if (code === 'KeyR' || code === 'Enter' || code === 'Space' || MOVE[code]) retry();
   } else if (state === 'won') {
+    if (mode === 'boss') return;
     if (finaleRunning()) {
       if (stateTime > 3 && (code === 'Enter' || code === 'Space' || code === 'Escape')) finishFinale();
       return;
@@ -329,6 +589,7 @@ addEventListener('keyup', (e) => held.delete(e.code));
 addEventListener('blur', () => { held.clear(); pause(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
 initFinale(() => ui.showWin(winResult));
+initCredits(creditsDone);
 initTouch(renderer.domElement);
 setTiltWanted(store.tiltOn());
 ui.setTiltLabel(store.tiltOn());
@@ -377,7 +638,12 @@ function shake(amount) {
 function updateCamera(dt) {
   const hp = head.group.position;
   let wantZoom = 1 + head.speed * tuning.camera.speedZoom * 0.1;
-  if (state === 'title') {
+  if (mode === 'boss') {
+    // Keep the whole platter in view, leaning a little toward the ball.
+    const lean = state === 'won' ? 0.15 : 0.4;
+    wanted.set(hp.x * lean, Math.max(-3, Math.min(hp.y, 1)) * 0.5, hp.z * lean + 0.6);
+    wantZoom = (state === 'won' ? 1.3 : 1.42) * (camera.aspect < 1 ? 1.45 : 1); // phones: see both edges
+  } else if (state === 'title') {
     // A slow fly-along of the course behind the title.
     const L = getCourse().length;
     titlePan += dt * 4.5;
@@ -475,7 +741,29 @@ function frame(nowMs) {
     ui.hideBanner();
   }
 
-  if (state === 'playing') {
+  const ccue = updateCredits(dt);
+  if (ccue === 'ko') { audio.playWin(); audio.playBoom(true); }
+  else if (ccue === 'title') audio.playMedal(0);
+  else if (ccue === 'black') {
+    // Behind the black: back to the courses, and take a snapshot of each for the credits.
+    leaveArena();
+    clearFX(); // no leftover fireworks in the snapshots
+    setState('credits');
+    shotQueue = [0, 1, 2, 3, 4];
+    audio.setTempo(96);
+    audio.setMusicLevel(0.6);
+  } else if (ccue === 'thanks') audio.playMedal(0);
+  else if (ccue === 'love') audio.playWin();
+  updatePortal(worldTime);
+
+  if (mode === 'boss' && state !== 'paused') {
+    bossFrame(gameDt, input);
+  } else if (state === 'credits') {
+    if (shotQueue.length) captureCourseShot(shotQueue.shift());
+  } else if (state === 'warp') {
+    head.update(gameDt, 0, 0);
+    if (stateTime > 0.75) enterBoss();
+  } else if (state === 'playing') {
     runTime += gameDt;
     head.update(gameDt, input.x, input.z);
     updateToys(gameDt, head, !window.__jam.calm);
@@ -487,7 +775,8 @@ function frame(nowMs) {
     audio.setRoll(head.speed);
     ui.updateHUD(runTime, collected, totalStars(), head.progress / getCourse().length);
     if (head.fellOff) {
-      die();
+      if (head.offEnd) startWarp();
+      else die();
     } else if (Math.hypot(head.group.position.x - boxCentre.x, head.group.position.z - boxCentre.z) < tuning.goal.radius) {
       win();
     }
@@ -528,6 +817,7 @@ function frame(nowMs) {
   shakeAmount = Math.max(0, shakeAmount - tuning.camera.shakeDecay * dt * 0.5);
   debugUpdate(head);
   renderer.render(scene, camera);
+  if (wantBossShot) { wantBossShot = false; bossShot = grabShot(); }
   updateFPS(dt, renderer);
   watchPerformance(dt);
 }
@@ -539,6 +829,10 @@ window.__jam = {
   get time() { return runTime; },
   get stars() { return collected; },
   get result() { return winResult; },
+  get mode() { return mode; },
+  get stateTime() { return stateTime; },
+  ball: ballState,
+  boss: bossFromMenu,
   head,
   course: getCourse,
   frameAt,

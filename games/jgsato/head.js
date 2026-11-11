@@ -85,6 +85,8 @@ export function createHead(scene) {
     isHome: false,
     fellOff: false,
     airborne: false,
+    openEnd: false, // the far end of the deck has no wall (the secret way off course 1)
+    offEnd: false,  // he rolled off that open end
     onShove: null, // main.js hooks these for shake, sound and particles
     onBonk: null,
     onLand: null,
@@ -93,8 +95,37 @@ export function createHead(scene) {
     get velocity() { return { x: velX, z: velZ }; },
     get speed() { return Math.hypot(velX, velZ); },
     get progress() { return lastS; },
-    update, reset, shove, scare, express, goHome,
+    update, reset, shove, scare, express, goHome, drive, placeAt,
   };
+
+  // Somewhere else (the boss platter) moves the ball itself; this keeps his face, lean and
+  // trail reacting to that motion.
+  function drive(dt, vx, vz, spinRate = 0) {
+    if (!(dt > 0)) return;
+    velX = vx;
+    velZ = vz;
+    spin = spinRate ? spin + spinRate * dt : 0;
+    if (expressionTimer > 0) {
+      expressionTimer -= dt;
+      if (expressionTimer <= 0 && !api.isHome) express('neutral', 0);
+    }
+    updateBust(dt);
+    updateTrail(dt);
+  }
+
+  // Put him somewhere with no course under him (the boss arena).
+  function placeAt(x, y, z) {
+    group.position.set(x, y, z);
+    velX = velZ = velY = prevVX = prevVZ = 0;
+    leanX = leanZ = leanVX = leanVZ = 0;
+    spin = 0;
+    api.isFalling = api.fellOff = api.airborne = api.isHome = api.offEnd = false;
+    homeAnim = null;
+    group.visible = true;
+    group.scale.setScalar(1);
+    express('neutral', 0);
+    for (const t of trail) { t.life = 0; t.mesh.visible = false; }
+  }
 
   function reset(x, z) {
     const n = nearest(x, z);
@@ -108,6 +139,7 @@ export function createHead(scene) {
     api.isHome = false;
     api.fellOff = false;
     api.airborne = false;
+    api.offEnd = false;
     landed = false;
     homeAnim = null;
     bust.root.position.set(0, 0, 0);
@@ -290,7 +322,14 @@ export function createHead(scene) {
     // The ends of the deck act like walls a little inside the edge, so the ball never overhangs.
     const endMargin = r * 0.6;
     const back = n.behind + Math.max(0, endMargin - n.s);
-    const front = n.beyond + Math.max(0, n.s - (getCourse().length - endMargin));
+    const front = api.openEnd ? 0 : n.beyond + Math.max(0, n.s - (getCourse().length - endMargin));
+    if (api.openEnd && n.beyond > r * 0.5) {
+      // Rolled clean off the far end.
+      velY = 1.5;
+      api.offEnd = true;
+      fallOff();
+      return;
+    }
     for (const [over, dir] of [[back, 1], [front, -1]]) {
       if (over <= 0) continue;
       p.x += n.tx * over * dir;
