@@ -412,7 +412,23 @@ function schedule() {
   }
 }
 
+// Which loop plays: 'main' (the oom-pah) or 'boss' (Djinormous's dirge).
+let song = 'main';
+let intensity = 0; // 0..1: the boss song adds layers as he wears down
+
+export function setSong(name) {
+  if (name === song) return;
+  song = name;
+  step = 0; // start the new loop from its first bar
+  if (ctx) nextTime = Math.max(nextTime, ctx.currentTime + 0.05);
+}
+
+export function setIntensity(x) {
+  intensity = Math.max(0, Math.min(1, x));
+}
+
 function playStep(i, t, eighth) {
+  if (song === 'boss') { bossStep(i, t, eighth); return; }
   const bar = Math.floor(i / 8);
   const beat = i % 8;
   const root = ROOTS[bar];
@@ -433,4 +449,87 @@ function playStep(i, t, eighth) {
     o.frequency.exponentialRampToValueAtTime(45, t + 0.14);
   }
   if (beat % 2) noiseHit(t, 0.04, 0.03, 'highpass', 7000, music);
+}
+
+// ---- BOSS MUSIC ----
+// Djinormous's dirge, in D minor with a phrygian Eb: a growling saw drone, a low organ line,
+// a ghostly choir, war drums in 3+3+2, and a funeral bell. As he wears down (intensity),
+// the drone opens up, a pulsing bass and ticking hats join in, and the drums double.
+const B_ROOTS = [38, 38, 34, 33, 38, 38, 39, 33]; // D D Bb A D D Eb A
+const B_CHOIR = { 38: [50, 53, 57], 34: [50, 53, 58], 33: [49, 52, 57], 39: [51, 55, 58] };
+const B_MELODY = [
+  [62, null, null, null, 65, null, 64, null],
+  [62, null, 61, null, 62, null, null, null],
+  [58, null, null, null, 62, null, 65, null],
+  [64, null, null, 61, null, null, null, null],
+  [62, null, null, null, 65, null, 69, null],
+  [68, null, 67, null, 65, null, 64, null], // G#: the tritone over D
+  [63, null, null, null, 62, null, 63, null],
+  [61, null, null, null, null, null, null, null],
+];
+
+// An oscillator (or two, detuned) through a lowpass filter, for the darker voices.
+function darkTone(type, freq, t, peak, attack, decay, cutoff, detune = 0) {
+  const f = ctx.createBiquadFilter();
+  f.type = 'lowpass';
+  f.frequency.setValueAtTime(cutoff, t);
+  f.Q.value = 2;
+  const g = ctx.createGain();
+  env(g, t, peak, attack, decay);
+  f.connect(g);
+  g.connect(music);
+  const freqs = detune ? [freq * (1 - detune), freq * (1 + detune)] : [freq];
+  for (const fr of freqs) {
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.setValueAtTime(fr, t);
+    o.connect(f);
+    o.start(t);
+    o.stop(t + attack + decay + 0.05);
+  }
+  return f;
+}
+
+function warDrum(t, peak) {
+  const o = tone('sine', 95, t, peak, 0.004, 0.45, music);
+  o.frequency.exponentialRampToValueAtTime(38, t + 0.4);
+  noiseHit(t, peak * 0.25, 0.12, 'lowpass', 600, music);
+}
+
+function bell(t) {
+  const f = midi(74);
+  tone('sine', f, t, 0.07, 0.004, 3.2, music);
+  tone('sine', f * 2.76, t, 0.025, 0.004, 1.6, music); // the clang: an inharmonic partial
+  tone('sine', f * 0.5, t, 0.05, 0.004, 3.6, music);
+}
+
+function bossStep(i, t, eighth) {
+  const bar = Math.floor(i / 8);
+  const beat = i % 8;
+  const root = B_ROOTS[bar];
+  const barLen = eighth * 8;
+
+  if (beat === 0) {
+    // The drone: a detuned saw growl, choked down low, opening up as he gets desperate.
+    darkTone('sawtooth', midi(root), t, 0.2, 0.08, barLen * 1.05, 260 + intensity * 700, 0.006);
+    darkTone('sine', midi(root - 12), t, 0.22, 0.05, barLen, 200);
+    // The choir: a slow-swelling minor chord, breathy and far away.
+    for (const n of B_CHOIR[root]) darkTone('triangle', midi(n), t, 0.035, barLen * 0.45, barLen * 0.7, 1400, 0.004);
+    if (bar % 4 === 0) bell(t);
+  }
+
+  // Organ line, low and slow.
+  const note = B_MELODY[bar][beat];
+  if (note) {
+    darkTone('square', midi(note - 12), t, 0.05, 0.03, eighth * 2.6, 900, 0.003);
+    darkTone('triangle', midi(note), t, 0.04, 0.03, eighth * 2.2, 2000);
+  }
+
+  // War drums: DUM . . DUM . . DUM . — doubling up when he's nearly done.
+  if (beat === 0 || beat === 3 || beat === 6) warDrum(t, beat === 0 ? 0.5 : 0.36);
+  else if (intensity > 0.55 && (beat === 7 || beat === 4)) warDrum(t, 0.22);
+
+  // Later layers: a pulsing bass and ticking hats, like a clock running out.
+  if (intensity > 0.3) darkTone('sawtooth', midi(root + 12), t, 0.06 * intensity, 0.005, eighth * 0.6, 500);
+  if (intensity > 0.3 && beat % 2) noiseHit(t, 0.025, 0.025, 'highpass', 8000, music);
 }
