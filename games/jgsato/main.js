@@ -256,6 +256,7 @@ function leaveArena() {
   sun.intensity = 2.3;
   rim.intensity = 0.8;
   scene.environmentIntensity = 0.38;
+  audio.setSong('main');
 }
 
 function warpFlash() {
@@ -299,7 +300,9 @@ function enterBoss() {
   setState('ready');
   ui.showBossHUD(tuning.boss.health);
   ui.showBannerText('Secret course', 'Djinormous', 'Ram him hard. Stay on the platter.');
-  audio.setTempo(156);
+  audio.setSong('boss');
+  audio.setIntensity(0);
+  audio.setTempo(84);
   audio.setMusicLevel(1);
 }
 
@@ -320,6 +323,8 @@ function bossWon() {
   head.express('happy', 0);
   wantBossShot = true;
   fireworkClock = 0;
+  audio.setSong('main'); // the dirge breaks into the happy tune, double time
+  audio.setTempo(156);
   audio.setMusicLevel(0.5);
 }
 
@@ -361,6 +366,10 @@ function bossFrame(dt, input) {
     hitStop = 0.12;
     shake(0.55);
     audio.playBossHit(ev.hit.hp);
+    // The dirge builds as he wears down: more layers, a little faster.
+    const worn = 1 - ev.hit.hp / tuning.boss.health;
+    audio.setIntensity(worn);
+    audio.setTempo(84 + worn * 18);
     ui.setBossHP(ev.hit.hp, tuning.boss.health);
     ui.flash();
     head.express('happy', 0.9);
