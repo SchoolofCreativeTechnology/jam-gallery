@@ -114,6 +114,8 @@ export function createHead(scene) {
     bust.root.scale.setScalar(1);
     bust.root.rotation.set(-tuning.head.faceUp, 0, 0);
     glass.visible = outline.visible = glint.visible = true;
+    group.visible = true;
+    group.scale.setScalar(1);
     express('neutral', 0);
     for (const t of trail) { t.life = 0; t.mesh.visible = false; }
   }
@@ -335,12 +337,14 @@ export function createHead(scene) {
       p.z = from.z + (to.z - from.z) * e;
       p.y = from.y + (to.y + 1.6 - from.y) * e + Math.sin(k * Math.PI) * 1.2;
     } else {
-      // Sink into it, shrinking a touch as the glass slips under the rim.
-      const k = Math.min(1, (t - 0.45) / 0.5);
+      // Sink all the way below the rim, shrinking a touch, then he's gone and the lid can shut.
+      const k = Math.min(1, (t - 0.45) / 0.45);
+      const e = k * k;
       p.x = to.x;
       p.z = to.z;
-      p.y = to.y + 1.6 - k * 1.5;
-      if (k >= 1) glass.visible = outline.visible = glint.visible = false;
+      p.y = to.y + 1.6 - e * (1.6 + r * 0.95);
+      group.scale.setScalar(1 - 0.3 * e);
+      if (k >= 1) group.visible = false;
     }
     velX = velZ = 0;
   }

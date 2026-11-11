@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#1a1025">
   <title>Jambi's Head</title>
+  <script>
+    // Opened as ".../jgsato" without the slash, every relative file (style.css, main.js) would
+    // load from the wrong folder and the page would come up blank. Add the slash first.
+    if (location.protocol !== 'file:' && !location.pathname.endsWith('/') && !/\.[a-z0-9]+$/i.test(location.pathname)) {
+      location.replace(location.pathname + '/' + location.search + location.hash);
+    }
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Lilita+One&family=Nunito:wght@700;800;900&display=swap">

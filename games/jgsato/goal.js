@@ -121,9 +121,11 @@ export function updateGoal(dt, time) {
   if (closing > 0) {
     closing += dt;
     // Hold open while he sinks in, then slam shut with a little bounce.
-    const k = Math.max(0, (closing - 0.75) / 0.25);
+    // He's fully below the rim (and hidden) at 0.9s; the lid starts swinging just after.
+    const k = Math.max(0, (closing - 0.95) / 0.22);
     const shut = Math.min(1, k);
-    lidPivot.rotation.x = LID_OPEN * (1 - shut) + (k >= 1 ? Math.abs(Math.sin((closing - 1) * 30)) * Math.max(0, 0.15 - (closing - 1) * 0.3) : 0);
+    const after = closing - 1.17;
+    lidPivot.rotation.x = LID_OPEN * (1 - shut * shut) + (k >= 1 ? Math.abs(Math.sin(after * 30)) * Math.max(0, 0.15 - after * 0.3) : 0);
     if (k >= 1) { beam.visible = false; arrow.visible = false; ring.visible = false; }
   }
 }
