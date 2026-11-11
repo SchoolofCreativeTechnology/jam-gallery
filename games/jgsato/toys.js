@@ -250,6 +250,8 @@ function queueCar(head, speed, warn) {
     const ahead = Math.max(tuning.cars.aheadMin, forward * (warn + cross * 0.5) + j0 + Math.random() * (j1 - j0));
     const s = head.progress + ahead;
     if (s > course.length - 5) return;
+    // No cars on or right around broken track: the jump is the challenge there.
+    if (course.gaps.some((g) => s > g.s0 - 4 && s < g.s1 + 2.5)) continue;
     // Don't stack lanes on top of each other.
     if (lanes.some((l) => Math.abs(l.s - s) < 1.8) || cars.some((c) => !c.falling && Math.abs(c.s - s) < 1.8)) continue;
     const f = frameAt(s);

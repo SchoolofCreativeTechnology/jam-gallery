@@ -303,6 +303,73 @@ body:not(.touch) #pause-btn { display: none; }
 #stick.on { display: grid; }
 #stick .knob { width: 46px; height: 46px; border-radius: 50%; background: rgba(255, 246, 230, 0.75); border: 3px solid var(--ink); }
 
+/* ---- FINALE: the last course's ending ---- */
+#finale {
+  position: absolute; inset: 0; z-index: 30;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem;
+  background: radial-gradient(ellipse at 50% 45%, rgba(255, 122, 176, 0.55), rgba(90, 30, 140, 0.82) 60%, rgba(26, 16, 37, 0.94));
+  pointer-events: auto; overflow: hidden;
+  opacity: 0;
+}
+#finale.show { animation: finale-in 0.6s ease forwards; }
+@keyframes finale-in { to { opacity: 1; } }
+#finale .rain { position: absolute; inset: 0; pointer-events: none; }
+#finale .rain span { position: absolute; left: 0; top: 0; font-size: 34px; line-height: 1; will-change: transform; }
+#finale .love {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  width: min(96vw, 1100px); gap: 0.5rem;
+}
+#finale .script { width: min(70vw, 760px); height: auto; overflow: visible; filter: drop-shadow(0 6px 0 rgba(42, 22, 48, 0.55)) drop-shadow(0 0 22px rgba(255, 210, 61, 0.45)); }
+#finale .script text {
+  font-family: 'Great Vibes', 'Brush Script MT', cursive;
+  font-size: 200px;
+  fill-opacity: 0;
+  stroke: #fff6e6; stroke-width: 7; stroke-linejoin: round; paint-order: stroke fill;
+  stroke-dasharray: 4200; stroke-dashoffset: 4200;
+}
+#finale.writing .script text { animation: write 2.3s cubic-bezier(0.45, 0.05, 0.4, 1) forwards, fill-in 0.9s 1.7s ease forwards; }
+@keyframes write { to { stroke-dashoffset: 0; } }
+@keyframes fill-in { to { fill-opacity: 1; } }
+#finale.written .script { animation: throb 1.4s 0.2s ease-in-out infinite; }
+@keyframes throb { 50% { transform: scale(1.04); } }
+#finale .jambi { width: min(26vw, 240px); height: auto; transform: scale(0) rotate(-30deg); opacity: 0; }
+#finale.jambi-in .jambi { animation: pop 0.75s cubic-bezier(0.3, 1.6, 0.5, 1) forwards, bob 2.2s 0.8s ease-in-out infinite; }
+@keyframes pop { to { transform: scale(1) rotate(8deg); opacity: 1; } }
+@keyframes bob { 0%, 100% { transform: scale(1) rotate(8deg); } 50% { transform: scale(1.04) translateY(-8px) rotate(2deg); opacity: 1; } }
+#finale.jambi-in .jambi { opacity: 1; }
+#finale .go { position: relative; opacity: 0; transform: translateY(16px); transition: opacity 0.4s, transform 0.4s; pointer-events: none; }
+#finale.ready .go { opacity: 1; transform: none; pointer-events: auto; }
+@media (max-aspect-ratio: 1/1) {
+  #finale .love { flex-direction: column; }
+  #finale .script { width: 94vw; }
+  #finale .jambi { width: min(46vw, 220px); }
+}
+
+/* ---- TILT ---- */
+body:not(.tilt) .tilt-only { display: none !important; }
+body.tilt .no-tilt { display: none !important; }
+.chip {
+  margin-top: 0.7rem; padding: 0.4rem 1rem; font-size: 0.85rem; border-radius: 99px;
+  background: rgba(255, 246, 230, 0.92);
+}
+/* A spirit level at the bottom of the screen: the bubble shows which way you're tipping him. */
+#tilt-level {
+  position: fixed; left: 50%; bottom: max(18px, env(safe-area-inset-bottom));
+  width: 56px; height: 56px; margin-left: -28px; border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.55); background: rgba(30, 16, 48, 0.35);
+  display: none; place-items: center; pointer-events: none;
+}
+#tilt-level::before {
+  content: ''; position: absolute; width: 14px; height: 14px; border-radius: 50%;
+  border: 2px dashed rgba(255, 255, 255, 0.45);
+}
+#tilt-level.on { display: grid; }
+#tilt-level .bubble {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--yellow); border: 2px solid var(--ink);
+  transition: transform 60ms linear;
+}
+
 @media (max-width: 560px) {
   .card { width: 98px; padding: 0.5rem 0.35rem; border-radius: 14px; }
   .card .num { font-size: 1.5rem; }

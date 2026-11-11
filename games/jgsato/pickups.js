@@ -24,7 +24,7 @@ export function loadStars(scene, level) {
     const f = frameAt(distanceAt(data.at));
     const lat = data.off * f.w * 0.82;
     const group = new THREE.Group();
-    group.position.set(f.x + f.rx * lat, f.y + 0.75, f.z + f.rz * lat);
+    group.position.set(f.x + f.rx * lat, f.y + 0.75 + (data.up || 0), f.z + f.rz * lat);
     const star = new THREE.Mesh(starGeo, starMat);
     star.castShadow = true;
     const halo = new THREE.Mesh(haloGeo, haloMat);

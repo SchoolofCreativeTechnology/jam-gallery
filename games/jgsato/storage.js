@@ -1,4 +1,4 @@
-// Best times, unlocked courses and the mute setting, kept in this browser.
+// Best times, unlocked courses, and the sound and tilt settings, kept in this browser.
 // If storage is blocked (private windows, some embeds) the game still plays; it just forgets.
 const KEY = 'jambis-head-v1';
 
@@ -9,10 +9,10 @@ function read() {
     const raw = localStorage.getItem(KEY);
     const parsed = raw ? JSON.parse(raw) : null;
     if (parsed && typeof parsed === 'object') {
-      return { best: parsed.best || {}, unlocked: Math.max(1, parsed.unlocked | 0), muted: !!parsed.muted };
+      return { best: parsed.best || {}, unlocked: Math.max(1, parsed.unlocked | 0), muted: !!parsed.muted, tilt: parsed.tilt !== false };
     }
   } catch { /* storage unavailable */ }
-  return { best: {}, unlocked: 1, muted: false };
+  return { best: {}, unlocked: 1, muted: false, tilt: true };
 }
 
 function write() {
@@ -36,6 +36,15 @@ export function isMuted() {
 
 export function setMuted(m) {
   data.muted = m;
+  write();
+}
+
+export function tiltOn() {
+  return data.tilt;
+}
+
+export function setTilt(on) {
+  data.tilt = on;
   write();
 }
 

@@ -16,7 +16,8 @@ import { initFX, burst, shockwave, clearFX, updateFX } from './fx.js';
 import * as audio from './audio.js';
 import * as ui from './ui.js';
 import * as store from './storage.js';
-import { initTouch, readTouch, requestTilt, recentreTilt, isTouch } from './mobile.js';
+import { initFinale, startFinale, updateFinale, finaleRunning, finish as finishFinale } from './finale.js';
+import { initTouch, readTouch, requestTilt, recentreTilt, setTiltWanted, tiltActive, isTouch } from './mobile.js';
 import { initFPS, updateFPS } from './fps.js';
 import { debugLoad, debugUpdate } from './debug.js';
 
@@ -95,6 +96,19 @@ head.onLand = (speed) => {
   shake(Math.min(0.35, speed * 0.015));
   audio.playBonk(speed);
 };
+head.onJump = () => {
+  audio.playSpring(0);
+  const p = head.group.position;
+  shockwave(new THREE.Vector3(p.x, p.y - tuning.head.radius, p.z), { color: '#ffcb2e', size: 2.2 });
+};
+head.onTouchdown = (impact) => {
+  const p = head.group.position;
+  burst(new THREE.Vector3(p.x, p.y - tuning.head.radius * 0.8, p.z), { count: 30, colors: ['#ffcb2e', '#ffffff', '#05d9e8'], speed: 5, up: 3.5, life: 0.7 });
+  shockwave(new THREE.Vector3(p.x, p.y - tuning.head.radius, p.z), { color: '#ffffff', size: 3.2 });
+  shake(Math.min(0.4, 0.12 + impact * 0.02));
+  hitStop = Math.max(hitStop, tuning.rules.hitStop);
+  audio.playBonk(Math.max(4, impact));
+};
 head.onBonk = (strength) => {
   shake(tuning.camera.shakeOnBonk * Math.min(1, strength / 6));
   audio.playBonk(strength);
@@ -163,7 +177,7 @@ function goTitle() {
 function play(i) {
   if (i >= store.unlockedCount()) return;
   audio.unlockAudio();
-  if (isTouch) requestTilt();
+  if (isTouch && store.tiltOn()) requestTilt();
   selected = i;
   loadLevel(i);
   resetRun();
@@ -200,8 +214,28 @@ function pause() {
 function resume() {
   if (state !== 'paused') return;
   ui.hidePause();
+  recentreTilt(); // they may have put the phone down
   state = pausedFrom;
   audio.setMusicLevel(1);
+}
+
+async function toggleTilt() {
+  audio.unlockAudio();
+  const on = !store.tiltOn();
+  store.setTilt(on);
+  setTiltWanted(on);
+  ui.setTiltLabel(on);
+  if (on) {
+    const ok = await requestTilt();
+    ui.toast(ok ? 'Tilt on: hold it how you like' : 'No tilt here: drag to roll', 1.6);
+  } else {
+    ui.toast('Tilt off: drag to roll', 1.2);
+  }
+}
+
+function levelTilt() {
+  recentreTilt();
+  ui.toast('Level set', 0.9);
 }
 
 function toggleMute() {
@@ -247,6 +281,8 @@ ui.initUI(levels, {
   play, retry, next, resume, pause,
   menu: () => { ui.hidePause(); selected = levelIndex; goTitle(); },
   mute: toggleMute,
+  tilt: toggleTilt,
+  level: levelTilt,
   hover: (i) => { if (state === 'title' && i !== selected) { selected = i; ui.selectCard(i); loadLevel(i); resetRun(); titlePan = 0; } },
 });
 
@@ -278,6 +314,10 @@ addEventListener('keydown', (e) => {
     if (code === 'Escape') { selected = levelIndex; goTitle(); }
     else if (code === 'KeyR' || code === 'Enter' || code === 'Space' || MOVE[code]) retry();
   } else if (state === 'won') {
+    if (finaleRunning()) {
+      if (stateTime > 3 && (code === 'Enter' || code === 'Space' || code === 'Escape')) finishFinale();
+      return;
+    }
     if (stateTime < tuning.rules.winPanelDelay * 0.6) return;
     if (code === 'Escape') { selected = levelIndex; goTitle(); }
     else if (code === 'KeyR') retry();
@@ -288,7 +328,16 @@ addEventListener('keyup', (e) => held.delete(e.code));
 // Alt-tabbing away swallows keyups, so drop every key, and pause a run in progress.
 addEventListener('blur', () => { held.clear(); pause(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+initFinale(() => ui.showWin(winResult));
 initTouch(renderer.domElement);
+setTiltWanted(store.tiltOn());
+ui.setTiltLabel(store.tiltOn());
+// Swap "Tilt to roll" / "Drag to roll" depending on whether tilt is really working.
+let tiltShown = null;
+function syncTiltClass() {
+  const on = isTouch && tiltActive();
+  if (on !== tiltShown) { tiltShown = on; document.body.classList.toggle('tilt', on); }
+}
 renderer.domElement.addEventListener('pointerdown', () => audio.unlockAudio());
 
 // Move input for this frame: x and z each in [-1, 1], never faster on the diagonal.
@@ -406,6 +455,11 @@ function frame(nowMs) {
   const dt = Math.min(0.05, Math.max(0, now - last));
   last = now;
   stateTime += dt;
+  syncTiltClass();
+  const cue = updateFinale(dt);
+  if (cue === 'write') audio.playMedal(0);
+  else if (cue === 'jambi') audio.playWin();
+  else if (cue === 'wink') audio.playStar(4);
 
   let gameDt = state === 'paused' ? 0 : dt;
   if (hitStop > 0) {
@@ -451,7 +505,14 @@ function frame(nowMs) {
       burst(boxTop.clone().setY(boxTop.y + 0.4), { count: 40, colors: ['#ffd23d', '#ffffff', '#05d9e8'], speed: 5, up: 6, life: 1.1 });
       shake(0.12);
     }
-    if (!panelShown && stateTime > tuning.rules.winPanelDelay) {
+    if (winResult.isLast) {
+      // The very last box: the big ending first, then the score.
+      if (!panelShown && !finaleRunning() && stateTime > 1.0) {
+        panelShown = true;
+        ui.hideHUD();
+        startFinale();
+      }
+    } else if (!panelShown && stateTime > tuning.rules.winPanelDelay) {
       panelShown = true;
       ui.showWin(winResult);
     }

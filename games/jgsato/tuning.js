@@ -69,6 +69,21 @@ export const stars = {
   radius: 0.5, // pickup reach, added to the head's radius
 };
 
+// ---- Jumps (a 'G' segment in levels.js is broken track you have to jump) ----
+export const jump = {
+  kickLength: 1.6,   // how long the kicker ramp before the gap is
+  kickHeight: 0.42,  // how high it curls up at the lip; steeper = more air
+  airControl: 0.25,  // how much steering you get in the air (1 = same as on the deck)
+  landingGrace: 0.45, // how far below the far deck's surface you can arrive and still scrape on
+};
+
+// ---- Touch and tilt ----
+export const touch = {
+  tiltFull: 16,      // degrees of tilt for a full push
+  tiltDeadzone: 2.5, // degrees of tilt that do nothing, so a steady hand holds still
+  tiltSmoothing: 0.35, // 0..1, how much each tilt reading moves the input (lower = smoother)
+};
+
 // ---- Goal ----
 export const goal = {
   radius: 1.4, // how close to his box counts as home
