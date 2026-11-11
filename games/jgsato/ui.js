@@ -35,6 +35,7 @@ export function initUI(levelList, h) {
     });
   }
   $('pause-btn').addEventListener('click', () => handlers.pause && handlers.pause());
+  $('tilt-btn').addEventListener('click', (e) => { e.stopPropagation(); handlers.tilt && handlers.tilt(); });
 }
 
 function hideAll() {
@@ -74,6 +75,10 @@ function renderCards(selected) {
   });
 }
 
+export function setTiltLabel(on) {
+  for (const b of document.querySelectorAll('#tilt-btn, .tilt-btn')) b.textContent = on ? 'Tilt: on' : 'Tilt: off';
+}
+
 // ---- HUD ----
 export function showHUD(levelIndex) {
   hideAll();
@@ -93,6 +98,10 @@ export function updateHUD(time, stars, totalStars, progress) {
     els.hudStars.textContent = text;
   }
   els.hudProgress.style.width = `${Math.round(Math.min(1, progress) * 100)}%`;
+}
+
+export function hideHUD() {
+  els.hud.classList.add('hidden');
 }
 
 export function showBanner(levelIndex) {

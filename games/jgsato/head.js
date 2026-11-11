@@ -84,9 +84,12 @@ export function createHead(scene) {
     isFalling: false,
     isHome: false,
     fellOff: false,
+    airborne: false,
     onShove: null, // main.js hooks these for shake, sound and particles
     onBonk: null,
     onLand: null,
+    onJump: null,
+    onTouchdown: null,
     get velocity() { return { x: velX, z: velZ }; },
     get speed() { return Math.hypot(velX, velZ); },
     get progress() { return lastS; },
@@ -104,6 +107,7 @@ export function createHead(scene) {
     api.isFalling = false;
     api.isHome = false;
     api.fellOff = false;
+    api.airborne = false;
     landed = false;
     homeAnim = null;
     bust.root.position.set(0, 0, 0);
@@ -198,6 +202,43 @@ export function createHead(scene) {
       return;
     }
 
+    if (api.airborne) {
+      // Over broken track: a ballistic arc, with only a little steering.
+      const air = tuning.jump.airControl;
+      velX += moveX * tuning.head.accel * air * dt;
+      velZ += moveZ * tuning.head.accel * air * dt;
+      p.x += velX * dt;
+      p.z += velZ * dt;
+      velY -= tuning.rules.gravity * dt;
+      p.y += velY * dt;
+      spin += dt * 4;
+      const n = nearest(p.x, p.z);
+      lastS = Math.max(lastS, n.s);
+      const overDeck = !n.gap && Math.abs(n.lat) <= n.w && n.behind === 0 && n.beyond === 0;
+      if (overDeck && p.y <= n.y + r) {
+        if (p.y >= n.y + r - tuning.jump.landingGrace) {
+          // Touchdown.
+          const impact = -velY;
+          p.y = n.y + r;
+          velY = 0;
+          spin = 0;
+          api.airborne = false;
+          express(impact > 9 ? 'scared' : 'happy', 0.6);
+          if (api.onTouchdown) api.onTouchdown(impact);
+        } else {
+          // Came in short and hit the torn edge: bounce back and drop.
+          const into = velX * n.tx + velZ * n.tz;
+          velX -= n.tx * into * 1.4;
+          velZ -= n.tz * into * 1.4;
+          if (api.onBonk) api.onBonk(Math.abs(into));
+          fallOff();
+        }
+      } else if (p.y < n.y - 1.2) {
+        fallOff();
+      }
+      return;
+    }
+
     const here = nearest(p.x, p.z);
     p.y = here.y + r;
 
@@ -219,6 +260,18 @@ export function createHead(scene) {
 
     // Rails, and the walls at either end of the deck.
     const n = nearest(p.x, p.z);
+
+    // Off the lip of a kicker and into the air.
+    if (n.gap) {
+      const gap = getCourse().gaps.find((g) => n.k >= g.k0 && n.k < g.k1);
+      const along = velX * n.tx + velZ * n.tz;
+      velY = Math.max(0, along) * (gap ? gap.lip : 0);
+      api.airborne = true;
+      lastS = n.s;
+      express('scared', 0);
+      if (api.onJump) api.onJump(along);
+      return;
+    }
     const limit = n.w - railStop;
     if ((n.lat > limit && n.railR) || (n.lat < -limit && n.railL)) {
       const side = Math.sign(n.lat);
@@ -257,11 +310,16 @@ export function createHead(scene) {
 
     // Over the edge.
     if (open && Math.abs(n.lat) > n.w + tuning.head.edgeGrace) {
-      api.isFalling = true;
-      api.fellOff = true;
       velY = 1.2;
-      express('dizzy', 0);
+      fallOff();
     }
+  }
+
+  function fallOff() {
+    api.isFalling = true;
+    api.fellOff = true;
+    api.airborne = false;
+    express('dizzy', 0);
   }
 
   function updateHome(dt) {

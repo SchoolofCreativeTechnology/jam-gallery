@@ -1,20 +1,31 @@
-// Touch controls. Drag anywhere on the screen and the head rolls toward your finger, like a
-// thumbstick that appears where you touch. Tilting the phone works too, where it's allowed.
+// Touch controls. Tilt the phone and the head rolls downhill, like a marble in a tray.
+// Dragging anywhere also works, as a thumbstick that appears where you touch, so the game is
+// playable on devices with no motion sensor (or where the player said no).
+import * as tuning from './tuning.js';
+
 const STICK_RANGE = 60; // pixels of drag for full push
-const TILT_SENSITIVITY = 0.07;
-const TILT_DEADZONE = 2.5;
 
 export const isTouch = (typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches) ||
   (typeof window !== 'undefined' && 'ontouchstart' in window);
 
 let stick = null; // { id, x0, y0, x, y }
-let stickEl, knobEl;
-let tiltOn = false, tiltAsked = false;
-let gamma0 = 0, beta0 = 0, gamma = 0, beta = 0;
+let stickEl, knobEl, levelEl, bubbleEl;
+
+// Tilt state. "up" is the direction of the sky in screen coordinates, so it works the same
+// in portrait and landscape and however steeply the phone is held.
+let tiltWanted = true;
+let listening = false;
+let gotReading = false;
+let pitch = 0, roll = 0;     // the phone right now, radians
+let pitch0 = 0, roll0 = 0;   // the "level" the player is holding it at
+let needCentre = true;
+let tx = 0, tz = 0;          // smoothed tilt input
 
 export function initTouch(canvas) {
   stickEl = document.getElementById('stick');
   knobEl = stickEl && stickEl.querySelector('.knob');
+  levelEl = document.getElementById('tilt-level');
+  bubbleEl = levelEl && levelEl.querySelector('.bubble');
 
   canvas.addEventListener('pointerdown', (e) => {
     if (e.pointerType === 'mouse' || stick) return;
@@ -40,6 +51,11 @@ export function initTouch(canvas) {
   };
   canvas.addEventListener('pointerup', end);
   canvas.addEventListener('pointercancel', end);
+
+  // Turning the phone between portrait and landscape changes what "level" means.
+  const recentre = () => { needCentre = true; };
+  if (screen.orientation) screen.orientation.addEventListener('change', recentre);
+  window.addEventListener('orientationchange', recentre);
 }
 
 function drawKnob() {
@@ -56,33 +72,76 @@ function readStickRaw() {
   return { x: dx, y: dy };
 }
 
-// Ask for tilt. iOS needs this called from inside a tap.
+// Turn tilt on or off. Turning it on asks for permission where the browser needs it (iOS),
+// which only works from inside a tap. Resolves to true if tilt is (or may soon be) working.
 export async function requestTilt() {
-  if (tiltAsked || !isTouch) return;
-  tiltAsked = true;
+  tiltWanted = true;
+  if (!isTouch || typeof DeviceOrientationEvent === 'undefined') return false;
+  if (listening) return true;
   try {
-    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-      if ((await DeviceOrientationEvent.requestPermission()) !== 'granted') return;
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+      if ((await DeviceOrientationEvent.requestPermission()) !== 'granted') return false;
     }
   } catch {
-    return;
+    return false;
   }
-  window.addEventListener('deviceorientation', (e) => {
-    if (e.gamma == null) return;
-    if (!tiltOn) {
-      gamma0 = e.gamma;
-      beta0 = e.beta;
-      tiltOn = true;
-    }
-    gamma = e.gamma;
-    beta = e.beta;
-  });
+  window.addEventListener('deviceorientation', onOrientation);
+  listening = true;
+  needCentre = true;
+  return true;
 }
 
-// Re-centre tilt to however the phone is held right now (called at the start of each run).
+export function setTiltWanted(on) {
+  tiltWanted = on;
+  tx = tz = 0;
+  needCentre = true;
+}
+
+// True once the phone has actually reported its tilt and the player wants it.
+export function tiltActive() {
+  return tiltWanted && gotReading;
+}
+
+function onOrientation(e) {
+  if (e.beta == null || e.gamma == null) return;
+  gotReading = true;
+  // The sky's direction in the phone's own frame, from its Euler angles...
+  const b = (e.beta * Math.PI) / 180, g = (e.gamma * Math.PI) / 180;
+  const ux = -Math.sin(g) * Math.cos(b), uy = Math.sin(b), uz = Math.cos(g) * Math.cos(b);
+  // ...then turned into the screen's frame, for whichever way up the screen is.
+  const angle = ((screen.orientation && screen.orientation.angle) ?? window.orientation ?? 0) * Math.PI / 180;
+  const sx = ux * Math.cos(angle) - uy * Math.sin(angle);
+  const sy = ux * Math.sin(angle) + uy * Math.cos(angle);
+  roll = Math.asin(Math.max(-1, Math.min(1, sx)));
+  pitch = Math.atan2(sy, uz);
+  if (needCentre) recentreTilt();
+
+  const t = tuning.touch;
+  const full = (t.tiltFull * Math.PI) / 180, dead = (t.tiltDeadzone * Math.PI) / 180;
+  const shape = (d) => {
+    const a = Math.abs(d);
+    if (a < dead) return 0;
+    return Math.sign(d) * Math.min(1, (a - dead) / (full - dead));
+  };
+  // Right edge down rolls him right; top edge down rolls him up the screen.
+  const wantX = shape(-(roll - roll0));
+  const wantZ = shape(wrap(pitch - pitch0));
+  tx += (wantX - tx) * t.tiltSmoothing;
+  tz += (wantZ - tz) * t.tiltSmoothing;
+}
+
+function wrap(a) {
+  while (a > Math.PI) a -= Math.PI * 2;
+  while (a < -Math.PI) a += Math.PI * 2;
+  return a;
+}
+
+// Make however the phone is held right now count as level (called at the start of each run).
 export function recentreTilt() {
-  gamma0 = gamma;
-  beta0 = beta;
+  pitch0 = pitch;
+  roll0 = roll;
+  tx = tz = 0;
+  needCentre = !gotReading;
 }
 
 // The touch "stick": {x, z} each in [-1, 1]. Screen up is away from the camera (-z).
@@ -92,12 +151,11 @@ export function readTouch() {
     const s = readStickRaw();
     if (Math.hypot(s.x, s.y) > 0.12) { x += s.x; z += s.y; }
   }
-  if (tiltOn) {
-    let dx = gamma - gamma0, dz = beta - beta0;
-    if (Math.abs(dx) < TILT_DEADZONE) dx = 0;
-    if (Math.abs(dz) < TILT_DEADZONE) dz = 0;
-    x += Math.max(-1, Math.min(1, dx * TILT_SENSITIVITY));
-    z += Math.max(-1, Math.min(1, dz * TILT_SENSITIVITY));
+  const tilting = tiltActive();
+  if (tilting) { x += tx; z += tz; }
+  if (levelEl) {
+    levelEl.classList.toggle('on', tilting);
+    if (tilting && bubbleEl) bubbleEl.style.transform = `translate(${tx * 18}px, ${tz * 18}px)`;
   }
   return { x, z, touching: !!stick };
 }

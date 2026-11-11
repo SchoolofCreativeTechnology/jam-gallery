@@ -2,6 +2,7 @@
 // one place that answers "where is the deck here, how wide, how steep, is there a rail?".
 // The mesh and the collision come from the same samples, so what you see is what you hit.
 import * as THREE from 'three';
+import * as tuning from './tuning.js';
 
 // ---- SHAPE ----
 const SPACING = 0.3;       // centre-line sample spacing, in world units
@@ -35,7 +36,7 @@ export function buildCourse(level) {
   const curve = new THREE.CatmullRomCurve3(
     pts.map((p) => new THREE.Vector3(p[0], p[2], p[1])), false, 'centripetal'
   );
-  const xs = [], ys = [], zs = [], ws = [], rl = [], rr = [], seg = [], segF = [];
+  const xs = [], ys = [], zs = [], ws = [], rl = [], rr = [], gp = [], seg = [], segF = [];
   const v = new THREE.Vector3();
   for (let i = 0; i < n - 1; i++) {
     const a = pts[i];
@@ -50,17 +51,38 @@ export function buildCourse(level) {
       ws.push(a[3] + (b[3] - a[3]) * e);
       rl.push(a[4].includes('L'));
       rr.push(a[4].includes('R'));
+      gp.push(a[4].includes('G'));
       seg.push(i);
       segF.push(f);
     }
   }
 
   const N = xs.length;
+  gp[N - 1] = false;
   const s = new Float32Array(N);
   const tx = new Float32Array(N);
   const tz = new Float32Array(N);
   const slope = new Float32Array(N);
   for (let k = 1; k < N; k++) s[k] = s[k - 1] + Math.hypot(xs[k] - xs[k - 1], zs[k] - zs[k - 1]);
+
+  // Broken track: a 'G' segment has no deck. The deck curls up into a kicker just before it,
+  // and the air over the gap is a straight line from lip to landing.
+  const gaps = [];
+  const kick = new Float32Array(N); // 0..1 up the kicker, for the hazard stripes
+  for (let k = 0; k < N - 1; k++) {
+    if (!gp[k] || (k > 0 && gp[k - 1])) continue;
+    let k1 = k;
+    while (gp[k1]) k1++;
+    for (let j = k - 1; j >= 0 && s[k] - s[j] < tuning.jump.kickLength; j--) {
+      const t = 1 - (s[k] - s[j]) / tuning.jump.kickLength;
+      ys[j] += tuning.jump.kickHeight * t * t;
+      kick[j] = t;
+    }
+    kick[k] = 1;
+    ys[k] += tuning.jump.kickHeight;
+    for (let j = k + 1; j < k1; j++) ys[j] = ys[k] + (ys[k1] - ys[k]) * (s[j] - s[k]) / (s[k1] - s[k]);
+    gaps.push({ k0: k, k1, s0: s[k], s1: s[k1], lip: 2 * tuning.jump.kickHeight / tuning.jump.kickLength });
+  }
   for (let k = 0; k < N; k++) {
     const a = Math.max(0, k - 1);
     const b = Math.min(N - 1, k + 1);
@@ -80,7 +102,7 @@ export function buildCourse(level) {
   }
 
   C = {
-    level, N, xs, ys, zs, ws, rl, rr, seg, segF, s, tx, tz, slope,
+    level, N, xs, ys, zs, ws, rl, rr, gp, gaps, kick, seg, segF, s, tx, tz, slope,
     length: s[N - 1],
     start: { x: xs[0], y: ys[0], z: zs[0] },
     end: { x: xs[N - 1], y: ys[N - 1], z: zs[N - 1] },
@@ -125,7 +147,7 @@ export function frameAt(dist) {
   return {
     x: lerp(C.xs), y: lerp(C.ys), z: lerp(C.zs), w: lerp(C.ws),
     tx: tx / h, tz: tz / h, rx: -tz / h, rz: tx / h,
-    railL: C.rl[lo], railR: C.rr[lo], s: dist,
+    railL: C.rl[lo], railR: C.rr[lo], gap: C.gp[lo], s: dist,
   };
 }
 
@@ -160,7 +182,7 @@ export function nearest(x, z) {
     slope: C.slope[k] + (C.slope[k + 1] - C.slope[k]) * f,
     tx, tz, rx, rz,
     lat: (x - cx) * rx + (z - cz) * rz,
-    railL: C.rl[k], railR: C.rr[k],
+    railL: C.rl[k], railR: C.rr[k], gap: C.gp[k],
     behind: k === 0 && braw < 0 ? -braw * len : 0,
     beyond: k === N - 2 && braw > 1 ? (braw - 1) * len : 0,
   };
@@ -195,7 +217,7 @@ export function createPathMesh(anisotropy = 1) {
   const sideMat = new THREE.MeshStandardMaterial({ map: sideTex, roughness: 0.7 });
   const bottomMat = new THREE.MeshStandardMaterial({ color: '#3a1a5c', roughness: 0.9 });
 
-  const all = () => true;
+  const all = (k) => !C.gp[k];
   const w = (k) => C.ws[k];
 
   // Top surface: square tiles, laid in world units so they never stretch.
@@ -210,11 +232,11 @@ export function createPathMesh(anisotropy = 1) {
   const curbV = (k) => C.s[k] / 0.8;
   const leftCurb = new THREE.Mesh(ribbon(
     (k) => -w(k), (k) => -w(k) + CURB_WIDTH, () => 0.004, () => 0.004,
-    (k) => [0, curbV(k)], (k) => [1, curbV(k)], (k) => !C.rl[k]
+    (k) => [0, curbV(k)], (k) => [1, curbV(k)], (k) => !C.rl[k] && !C.gp[k]
   ), curbMat);
   const rightCurb = new THREE.Mesh(ribbon(
     (k) => w(k) - CURB_WIDTH, (k) => w(k), () => 0.004, () => 0.004,
-    (k) => [0, curbV(k)], (k) => [1, curbV(k)], (k) => !C.rr[k]
+    (k) => [0, curbV(k)], (k) => [1, curbV(k)], (k) => !C.rr[k] && !C.gp[k]
   ), curbMat);
   leftCurb.receiveShadow = rightCurb.receiveShadow = true;
   group.add(leftCurb, rightCurb);
@@ -235,6 +257,20 @@ export function createPathMesh(anisotropy = 1) {
   ), bottomMat);
   for (const m of [rightWall, leftWall, bottom]) { m.castShadow = true; m.receiveShadow = true; group.add(m); }
   group.add(endCap(0, -1, sideMat), endCap(C.N - 1, 1, sideMat));
+  for (const g of C.gaps) {
+    group.add(endCap(g.k0, 1, sideMat), endCap(g.k1, -1, sideMat));
+    group.add(createJumpDressing(g, floorY, deckMat, sideMat));
+  }
+  if (C.gaps.length) {
+    // Hazard stripes up every kicker, so the jump reads from a long way back.
+    const hazardTex = cachedTexture('hazard', hazardTexture);
+    const stripes = new THREE.Mesh(ribbon(
+      (k) => -w(k), (k) => w(k), () => 0.006, () => 0.006,
+      (k) => [-w(k) / 0.9, C.s[k] / 0.9], (k) => [w(k) / 0.9, C.s[k] / 0.9], (k) => C.kick[k] > 0 && !C.gp[k]
+    ), new THREE.MeshStandardMaterial({ map: hazardTex, roughness: 0.5, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }));
+    stripes.receiveShadow = true;
+    group.add(stripes);
+  }
 
   group.add(createRails());
   group.add(createLegs(floorY));
@@ -343,6 +379,7 @@ function createLegs(floorY) {
   const spots = [];
   for (let d = 1.5; d < C.length - 0.5; d += LEG_SPACING) {
     const f = frameAt(d);
+    if (C.gaps.some((g) => d > g.s0 - 0.6 && d < g.s1 + 0.6)) continue;
     for (const side of [-1, 1]) {
       const lat = f.w * 0.55 * side;
       spots.push({ x: f.x + f.rx * lat, z: f.z + f.rz * lat, top: f.y - THICKNESS + 0.05 });
@@ -359,6 +396,53 @@ function createLegs(floorY) {
   });
   inst.receiveShadow = true;
   return inst;
+}
+
+// The broken bit: jagged teeth on both torn edges, and the missing chunks of track lying
+// smashed on the floor below, so it's obvious the deck is gone and why.
+function createJumpDressing(g, floorY, deckMat, sideMat) {
+  const group = new THREE.Group();
+  const toothGeo = new THREE.ConeGeometry(0.16, 0.42, 4);
+  const teeth = [];
+  for (const [k, dir] of [[g.k0, 1], [g.k1, -1]]) {
+    const w = C.ws[k];
+    const rx = -C.tz[k], rz = C.tx[k];
+    for (let lat = -w + 0.2; lat <= w - 0.15; lat += 0.38) {
+      const len = 0.18 + ((Math.sin(lat * 12.9 + k) + 1) * 0.5) * 0.24;
+      teeth.push({
+        x: C.xs[k] + rx * lat + C.tx[k] * dir * len * 0.5,
+        y: C.ys[k] - THICKNESS * 0.5,
+        z: C.zs[k] + rz * lat + C.tz[k] * dir * len * 0.5,
+        yaw: Math.atan2(C.tx[k] * dir, C.tz[k] * dir), len,
+      });
+    }
+  }
+  const inst = new THREE.InstancedMesh(toothGeo, sideMat, teeth.length);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sc = new THREE.Vector3();
+  teeth.forEach((t, i) => {
+    e.set(Math.PI / 2, t.yaw, 0, 'YXZ');
+    q.setFromEuler(e);
+    sc.set(1, t.len / 0.42, THICKNESS / 0.32);
+    m.compose(new THREE.Vector3(t.x, t.y, t.z), q, sc);
+    inst.setMatrixAt(i, m);
+  });
+  inst.castShadow = true;
+  group.add(inst);
+
+  // Chunks of the missing deck, tumbled on the floor.
+  const mid = frameAt((g.s0 + g.s1) / 2);
+  const chunkGeo = new THREE.BoxGeometry(1, THICKNESS, 1);
+  const mats = [sideMat, sideMat, deckMat, sideMat, sideMat, sideMat];
+  const pieces = [[-0.7, 0.4, 1.5, 1.2, 0.5], [0.9, -0.5, 1.2, 1.0, -0.8], [0.1, 1.3, 0.9, 0.7, 2.1]];
+  for (const [a, b, sx, sz, yaw] of pieces) {
+    const chunk = new THREE.Mesh(chunkGeo, mats);
+    chunk.scale.set(sx * mid.w * 0.6, 1, sz);
+    chunk.position.set(mid.x + mid.rx * a * mid.w * 0.6 + mid.tx * b, floorY + THICKNESS * 0.5 + 0.05, mid.z + mid.rz * a * mid.w * 0.6 + mid.tz * b);
+    chunk.rotation.set(a * 0.25, yaw, b * 0.2);
+    chunk.castShadow = chunk.receiveShadow = true;
+    group.add(chunk);
+  }
+  return group;
 }
 
 // A chequered start line across the deck.
@@ -437,6 +521,20 @@ function sideTexture() {
   for (let x = 4; x < 64; x += 16) {
     ctx.beginPath();
     ctx.arc(x + 4, 38, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  return finish(c);
+}
+
+function hazardTexture() {
+  const [c, ctx] = canvas(64, 64);
+  ctx.fillStyle = '#ffcb2e';
+  ctx.fillRect(0, 0, 64, 64);
+  ctx.fillStyle = '#2a1640';
+  for (let i = -64; i < 64; i += 32) {
+    ctx.beginPath();
+    ctx.moveTo(i, 64); ctx.lineTo(i + 16, 64); ctx.lineTo(i + 80, 0); ctx.lineTo(i + 64, 0);
+    ctx.closePath();
     ctx.fill();
   }
   return finish(c);
